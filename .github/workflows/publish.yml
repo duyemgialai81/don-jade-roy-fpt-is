@@ -1,0 +1,30 @@
+name: Build and Publish Release
+on:
+  push:
+    tags:
+      - 'v*' # Tự động chạy khi bạn push tag bắt đầu bằng 'v' (VD: git push origin v1.0.1)
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write # Cấp quyền bắt buộc để tạo Release và upload file .exe
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Vite
+        run: npm run build
+
+      - name: Build and Publish Electron App
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Token có sẵn của GitHub
+        run: npx electron-builder --win --publish always

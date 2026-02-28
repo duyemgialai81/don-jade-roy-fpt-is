@@ -1,0 +1,16 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependencies (Bỏ qua Node Modules)
+node_modules/
+
+# Thư mục Build của React (Vite) và Electron
+dist/
+dist_electron/
+
+# Các file cấu hình hệ điều hành / Text editor
+.DS_Store
+.vscode/
+.idea/
