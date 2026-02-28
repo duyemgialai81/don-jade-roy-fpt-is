@@ -20,15 +20,20 @@ const createWindow = () => {
       contextIsolation: false,
     },
   });
-  win.maximize();
+  
+  // LỆNH NÀY GIÚP XÓA THANH MENU (File, Edit, View, Window, Help...)
+  win.setMenu(null); 
+
   if (app.isPackaged) {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   } else {
     win.loadURL('http://localhost:5173');
   }
+  
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 };
+
 app.whenReady().then(() => {
   createWindow();
 
@@ -36,13 +41,27 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-ipcMain.on('start-download', () => {
-  autoUpdater.downloadUpdate();
+
+// ==========================================
+// KÊNH GIAO TIẾP VỚI GIAO DIỆN REACT (IPC)
+// ==========================================
+
+// 1. Nhận lệnh báo tải bản cập nhật từ React (ĐÃ SỬA LỖI "Check update first")
+ipcMain.on('start-download', async () => {
+  try {
+    // Bắt buộc phải kiểm tra ngầm trước khi tải
+    await autoUpdater.checkForUpdates();
+    // Sau đó mới tiến hành tải xuống
+    autoUpdater.downloadUpdate();
+  } catch (error) {
+    if (win) win.webContents.send('update-error', 'Lỗi hệ thống: ' + error.message);
+  }
 });
 
 // 2. Nhận lệnh báo Cài đặt và Khởi động lại từ React
