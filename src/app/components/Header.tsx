@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Settings, Search, X, DownloadCloud } from 'lucide-react';
-import { NotificationsList, SettingsList } from './ui/HeaderDropdowns';
+import { Bell, Settings, Search } from 'lucide-react';
+import { HeaderDropdown, NotificationsList, SettingsList, UpdateInfo } from '../components/ui/HeaderDropdowns';
 
 // Import trực tiếp version từ package.json
-// Lưu ý: Kiểm tra lại đường dẫn import này cho đúng với cấu trúc thư mục của bạn
+// LƯU Ý: Chỉnh lại số lượng ../ sao cho trỏ đúng ra file package.json gốc
 import pkg from '../../../package.json'; 
 
 interface HeaderProps {
@@ -12,23 +12,16 @@ interface HeaderProps {
     titles: Record<string, string>;
 }
 
-// ĐÃ CẬP NHẬT THÔNG TIN REPO GITHUB MỚI CỦA BẠN
+// CẤU HÌNH GITHUB
 const GITHUB_OWNER = 'duyemgialai81'; 
 const GITHUB_REPO = 'don-jade-roy-fpt-is'; 
 const CURRENT_VERSION = `v${pkg.version}`; 
-
-interface UpdateInfo {
-    version: string;
-    notes: string;
-    downloadUrl: string;
-}
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
 
-    // --- LOGIC KIỂM TRA UPDATE TỪ GITHUB ---
     useEffect(() => {
         const isElectron = navigator.userAgent.toLowerCase().includes('electron');
         if (!isElectron) return; 
@@ -46,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                     
                     setUpdateAvailable({
                         version: latestVersion,
-                        notes: data.body || "Đã có bản cập nhật mới mang lại trải nghiệm tốt hơn.",
+                        notes: data.body || "Đã có bản cập nhật hệ thống mới giúp tăng hiệu suất và sửa lỗi.",
                         downloadUrl: exeAsset ? exeAsset.browser_download_url : data.html_url
                     });
                 }
@@ -91,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                  </div>
                 <div className="h-8 w-[1px] bg-slate-200 mx-2 hidden sm:block" />
                 
-                {/* Notification Button */}
+                {/* NÚT THÔNG BÁO */}
                 <div className="relative">
                   <button 
                     onClick={() => {
@@ -106,62 +99,13 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                     )}
                   </button>
 
-                  <AnimatePresence>
-                    {isNotificationsOpen && (
-                      <>
-                         <div className="fixed inset-0 z-40" onClick={() => setIsNotificationsOpen(false)} />
-                         <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute right-0 top-full mt-3 w-80 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden z-50 origin-top-right flex flex-col max-h-[500px]"
-                        >
-                          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm shrink-0">
-                            <h4 className="font-bold text-slate-700 text-sm">Thông báo</h4>
-                            <button onClick={() => setIsNotificationsOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-200/50 transition-colors">
-                              <X size={16} />
-                            </button>
-                          </div>
-                          
-                          <div className="overflow-y-auto custom-scrollbar flex-1">
-                            {/* KHỐI HIỂN THỊ BẢN CẬP NHẬT */}
-                            {updateAvailable && (
-                                <div className="p-4 bg-indigo-50/50 border-b border-indigo-100">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg shrink-0">
-                                            <DownloadCloud size={20} />
-                                        </div>
-                                        <div>
-                                            <h5 className="text-sm font-bold text-slate-800">
-                                                Đã có bản cập nhật mới ({updateAvailable.version})
-                                            </h5>
-                                            <div className="text-xs text-slate-600 mt-1 line-clamp-3 prose prose-sm">
-                                                {updateAvailable.notes}
-                                            </div>
-                                            <a 
-                                                href={updateAvailable.downloadUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="mt-3 inline-flex items-center justify-center w-full px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                                            >
-                                                Tải xuống cài đặt
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Danh sách thông báo cũ */}
-                            <NotificationsList />
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
+                  {/* Truyền updateAvailable vào NotificationsList */}
+                  <HeaderDropdown isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} title="Thông báo">
+                      <NotificationsList updateAvailable={updateAvailable} />
+                  </HeaderDropdown>
                 </div>
 
-                {/* Settings Button */}
+                {/* NÚT CÀI ĐẶT */}
                 <div className="relative">
                   <button 
                     onClick={() => {
@@ -173,30 +117,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                     <Settings size={20} />
                   </button>
                   
-                  <AnimatePresence>
-                    {isSettingsOpen && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setIsSettingsOpen(false)} />
-                        <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute right-0 top-full mt-3 w-64 bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden z-50 origin-top-right"
-                        >
-                          <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 backdrop-blur-sm">
-                            <h4 className="font-bold text-slate-700 text-sm">Cài đặt nhanh</h4>
-                            <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-200/50 transition-colors">
-                              <X size={16} />
-                            </button>
-                          </div>
-                          <div className="py-1">
-                            <SettingsList />
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
+                  <HeaderDropdown isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} title="Cài đặt nhanh">
+                      <SettingsList />
+                  </HeaderDropdown>
                 </div>
             </div>
         </header>

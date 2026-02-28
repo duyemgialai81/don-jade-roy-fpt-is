@@ -19,13 +19,8 @@ export const HeaderDropdown: React.FC<DropdownProps> = ({ isOpen, onClose, title
         onClose();
       }
     };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, onClose]);
 
   return (
@@ -56,7 +51,6 @@ export const HeaderDropdown: React.FC<DropdownProps> = ({ isOpen, onClose, title
   );
 };
 
-// --- Interface cho UpdateInfo ---
 export interface UpdateInfo {
   version: string;
   notes: string;
@@ -67,10 +61,64 @@ interface NotificationsListProps {
   updateAvailable?: UpdateInfo | null;
 }
 
+// Khai báo an toàn ipcRenderer để React gọi được lệnh của Electron
+const ipcRenderer = typeof window !== 'undefined' && window.require 
+  ? window.require('electron').ipcRenderer 
+  : null;
+
 export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvailable }) => {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isReadyToInstall, setIsReadyToInstall] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+
+  // Lắng nghe tín hiệu từ Backend Electron gửi lên
+  useEffect(() => {
+    if (!ipcRenderer) return;
+
+    const handleProgress = (_event: any, percent: number) => {
+      setDownloadProgress(Math.round(percent));
+    };
+
+    const handleDownloaded = () => {
+      setIsDownloading(false);
+      setIsReadyToInstall(true);
+    };
+
+    const handleError = (_event: any, message: string) => {
+      setIsDownloading(false);
+      setUpdateError('Lỗi tải xuống: ' + message);
+    };
+
+    ipcRenderer.on('download-progress', handleProgress);
+    ipcRenderer.on('update-downloaded', handleDownloaded);
+    ipcRenderer.on('update-error', handleError);
+
+    return () => {
+      ipcRenderer.removeAllListeners('download-progress');
+      ipcRenderer.removeAllListeners('update-downloaded');
+      ipcRenderer.removeAllListeners('update-error');
+    };
+  }, []);
+
+  const handleUpdateAction = () => {
+    if (!ipcRenderer) {
+        // Nếu chạy trên Web (Không phải Electron) thì mở link tải tay
+        if (updateAvailable) window.open(updateAvailable.downloadUrl, '_blank');
+        return;
+    }
+
+    if (isReadyToInstall) {
+      ipcRenderer.send('quit-and-install');
+    } else {
+      setIsDownloading(true);
+      setUpdateError('');
+      ipcRenderer.send('start-download');
+    }
+  };
+
   return (
     <div className="divide-y divide-slate-50">
-      {/* --- BANNER UPDATE MỚI --- */}
       {updateAvailable ? (
         <div className="p-4 flex gap-3 bg-indigo-50/80 hover:bg-indigo-50 transition-colors">
           <div className="flex-shrink-0 mt-1">
@@ -83,19 +131,48 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
               <h5 className="text-sm font-bold text-indigo-900">Bản cập nhật {updateAvailable.version}</h5>
               <span className="text-[10px] px-1.5 py-0.5 bg-red-500 text-white rounded font-bold animate-pulse">MỚI</span>
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed mb-3 line-clamp-2">{updateAvailable.notes}</p>
-            <a 
-               href={updateAvailable.downloadUrl}
-               target="_blank"
-               rel="noopener noreferrer"
-               className="block text-center w-full py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+            
+            {!isDownloading && !isReadyToInstall && (
+               <p className="text-xs text-slate-600 leading-relaxed mb-3 line-clamp-2">{updateAvailable.notes}</p>
+            )}
+
+            {updateError && (
+              <p className="text-xs text-red-500 font-medium mb-2">{updateError}</p>
+            )}
+
+            {/* Thanh tiến trình */}
+            {isDownloading && (
+              <div className="mb-3 mt-2">
+                <div className="flex justify-between text-xs text-indigo-600 font-medium mb-1">
+                  <span>Đang tải xuống...</span>
+                  <span>{downloadProgress}%</span>
+                </div>
+                <div className="w-full bg-indigo-100 rounded-full h-1.5">
+                  <div 
+                    className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300" 
+                    style={{ width: `${downloadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Nút hành động */}
+            <button 
+               onClick={handleUpdateAction}
+               disabled={isDownloading}
+               className={`mt-2 block w-full py-2 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm ${
+                 isReadyToInstall 
+                   ? 'bg-emerald-500 hover:bg-emerald-600 animate-pulse' 
+                   : isDownloading
+                     ? 'bg-indigo-400 cursor-not-allowed' 
+                     : 'bg-indigo-600 hover:bg-indigo-700' 
+               }`}
             >
-              Tải xuống bản cài đặt
-            </a>
+              {isReadyToInstall ? 'Khởi động lại & Cài đặt ngay' : isDownloading ? 'Đang xử lý...' : 'Tải & Cập nhật ngay'}
+            </button>
           </div>
         </div>
       ) : (
-        /* --- HIỂN THỊ KHI KHÔNG CÓ THÔNG BÁO NÀO --- */
         <div className="p-8 flex flex-col items-center justify-center text-center opacity-60">
           <Bell size={32} className="text-slate-300 mb-3" />
           <p className="text-sm font-medium text-slate-500">Chưa có thông báo mới</p>
@@ -107,19 +184,16 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
 };
 
 export const SettingsList = () => {
-  // Khởi tạo state cho các cài đặt
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isAutoUpdateEnabled, setIsAutoUpdateEnabled] = useState(true);
 
-  // Lấy trạng thái từ localStorage khi component vừa load
   useEffect(() => {
     setIsDarkMode(localStorage.getItem('app_theme') === 'dark');
     setIsSoundEnabled(localStorage.getItem('app_sound') !== 'disabled');
     setIsAutoUpdateEnabled(localStorage.getItem('app_auto_update') !== 'disabled');
   }, []);
 
-  // Các hàm toggle
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -147,7 +221,6 @@ export const SettingsList = () => {
     }
   };
 
-  // Nút gạt Toggle nhỏ dùng chung
   const Switch = ({ enabled }: { enabled: boolean }) => (
     <div className={`w-8 h-4 rounded-full relative transition-colors duration-300 ${enabled ? 'bg-indigo-500' : 'bg-slate-200'}`}>
       <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ${enabled ? 'right-0.5' : 'left-0.5'}`} />
@@ -156,7 +229,6 @@ export const SettingsList = () => {
 
   return (
     <div className="p-2 space-y-1">
-      {/* Tài khoản */}
       <button className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-colors group">
         <div className="p-2 bg-slate-100 text-slate-500 rounded-lg group-hover:bg-white group-hover:text-indigo-600 group-hover:shadow-sm transition-all">
           <User size={18} />
@@ -167,7 +239,6 @@ export const SettingsList = () => {
         </div>
       </button>
 
-      {/* Âm thanh */}
       <button onClick={toggleSound} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-colors group">
         <div className="p-2 bg-slate-100 text-slate-500 rounded-lg group-hover:bg-white group-hover:text-indigo-600 group-hover:shadow-sm transition-all">
           <Volume2 size={18} />
@@ -181,7 +252,6 @@ export const SettingsList = () => {
         </div>
       </button>
 
-      {/* Giao diện tối */}
       <button onClick={toggleDarkMode} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-colors group">
         <div className="p-2 bg-slate-100 text-slate-500 rounded-lg group-hover:bg-white group-hover:text-indigo-600 group-hover:shadow-sm transition-all">
           <Moon size={18} />
@@ -195,7 +265,6 @@ export const SettingsList = () => {
         </div>
       </button>
 
-      {/* Tự động cập nhật */}
       <button onClick={toggleAutoUpdate} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-colors group">
         <div className="p-2 bg-slate-100 text-slate-500 rounded-lg group-hover:bg-white group-hover:text-indigo-600 group-hover:shadow-sm transition-all">
           <DownloadCloud size={18} />
@@ -211,7 +280,6 @@ export const SettingsList = () => {
       
       <div className="h-px bg-slate-100 my-1 mx-2" />
 
-      {/* Đăng xuất */}
       <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-red-50 rounded-xl text-left transition-colors group">
         <div className="p-2 bg-slate-100 text-slate-500 rounded-lg group-hover:bg-white group-hover:text-red-600 group-hover:shadow-sm transition-all">
           <LogOut size={18} />

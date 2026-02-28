@@ -1,50 +1,66 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// Thêm thư viện cập nhật ngầm
+import pkgUpdater from 'electron-updater';
+const { autoUpdater } = pkgUpdater;
 
-// Lấy đường dẫn thư mục hiện tại (do cấu hình type: "module" trong package.json)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+let win;
+
 const createWindow = () => {
-  // Tạo cửa sổ ứng dụng Desktop
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1280,
     height: 800,
-    icon: path.join(__dirname, '../icon.ico'), // Gắn file icon.ico của bạn vào
+    icon: path.join(__dirname, '../icon.ico'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
   });
-
-  // Tự động phóng to lấp đầy màn hình ngay khi mở app (vẫn giữ lại thanh Taskbar của Windows)
   win.maximize();
-
-  // Kiểm tra môi trường để load giao diện
   if (app.isPackaged) {
-    // Nếu ứng dụng đã được đóng gói thành file .exe -> Load file giao diện tĩnh đã build
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   } else {
-    // Nếu đang viết code trên máy (chạy npm run electron:dev) -> Load qua server của Vite
     win.loadURL('http://localhost:5173');
   }
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
 };
-
-// Khi hệ thống lõi của Electron đã khởi động xong thì tiến hành mở cửa sổ
 app.whenReady().then(() => {
   createWindow();
 
-  // Dành riêng cho MacOS: Mở lại cửa sổ nếu click vào icon dưới dock mà không có cửa sổ nào đang mở
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
-
-// Thoát hoàn toàn ứng dụng khi người dùng bấm dấu X đỏ (đóng tất cả cửa sổ)
 app.on('window-all-closed', () => {
-  // Trên MacOS, app thường vẫn chạy ngầm cho đến khi ấn Cmd + Q. Code này đảm bảo thoát hẳn trên Windows.
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+ipcMain.on('start-download', () => {
+  autoUpdater.downloadUpdate();
+});
+
+// 2. Nhận lệnh báo Cài đặt và Khởi động lại từ React
+ipcMain.on('quit-and-install', () => {
+  autoUpdater.quitAndInstall(false, true); 
+});
+
+// 3. Gửi phần trăm tải về cho React để làm thanh tiến trình
+autoUpdater.on('download-progress', (progressObj) => {
+  if (win) win.webContents.send('download-progress', progressObj.percent);
+});
+
+// 4. Báo cho React biết đã tải xong file .exe vào bộ nhớ tạm
+autoUpdater.on('update-downloaded', () => {
+  if (win) win.webContents.send('update-downloaded');
+});
+
+// 5. Báo lỗi nếu có
+autoUpdater.on('error', (error) => {
+  if (win) win.webContents.send('update-error', error.message);
 });
