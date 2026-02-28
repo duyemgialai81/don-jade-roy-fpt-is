@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Settings, User, LogOut, Moon, Volume2, Check, X, Shield, Info, DownloadCloud } from 'lucide-react';
+import { Bell, Settings, User, LogOut, Moon, Volume2, X, DownloadCloud } from 'lucide-react';
 
 interface DropdownProps {
   isOpen: boolean;
@@ -56,7 +56,7 @@ export const HeaderDropdown: React.FC<DropdownProps> = ({ isOpen, onClose, title
   );
 };
 
-// --- Thêm interface cho UpdateInfo ---
+// --- Interface cho UpdateInfo ---
 export interface UpdateInfo {
   version: string;
   notes: string;
@@ -68,26 +68,10 @@ interface NotificationsListProps {
 }
 
 export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvailable }) => {
-  const notifications = [
-    { id: 1, title: 'Hệ thống bảo trì', desc: 'Dự kiến bảo trì vào 02:00 AM ngày mai.', time: '5m ago', type: 'warning', read: false },
-    { id: 2, title: 'Token hết hạn', desc: 'Token của bạn sẽ hết hạn trong 1 giờ.', time: '1h ago', type: 'error', read: false },
-    { id: 3, title: 'Đồng bộ hoàn tất', desc: 'Đã đồng bộ 150 user mới.', time: '2h ago', type: 'success', read: true },
-    { id: 4, title: 'Chào mừng quay lại', desc: 'Hệ thống hoạt động bình thường.', time: '1d ago', type: 'info', read: true },
-  ];
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'warning': return <div className="p-2 bg-amber-100 text-amber-600 rounded-full"><Shield size={16} /></div>;
-      case 'error': return <div className="p-2 bg-red-100 text-red-600 rounded-full"><Bell size={16} /></div>;
-      case 'success': return <div className="p-2 bg-emerald-100 text-emerald-600 rounded-full"><Check size={16} /></div>;
-      default: return <div className="p-2 bg-blue-100 text-blue-600 rounded-full"><Info size={16} /></div>;
-    }
-  };
-
   return (
     <div className="divide-y divide-slate-50">
-      {/* --- BANNER UPDATE MỚI (CHỈ HIỂN THỊ KHI CÓ UPDATE) --- */}
-      {updateAvailable && (
+      {/* --- BANNER UPDATE MỚI --- */}
+      {updateAvailable ? (
         <div className="p-4 flex gap-3 bg-indigo-50/80 hover:bg-indigo-50 transition-colors">
           <div className="flex-shrink-0 mt-1">
             <div className="p-2 bg-indigo-100 text-indigo-600 rounded-full shadow-sm">
@@ -110,29 +94,14 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
             </a>
           </div>
         </div>
-      )}
-
-      {/* --- DANH SÁCH THÔNG BÁO CŨ --- */}
-      {notifications.map((item) => (
-        <div key={item.id} className={`p-4 flex gap-3 hover:bg-slate-50 transition-colors cursor-pointer relative group ${!item.read ? 'bg-indigo-50/30' : ''}`}>
-          <div className="flex-shrink-0 mt-1">
-            {getIcon(item.type)}
-          </div>
-          <div className="flex-1">
-            <div className="flex justify-between items-start mb-1">
-              <h5 className={`text-sm font-semibold ${!item.read ? 'text-slate-800' : 'text-slate-600'}`}>{item.title}</h5>
-              <span className="text-[10px] text-slate-400 font-medium">{item.time}</span>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
-          </div>
-          {!item.read && (
-            <div className="absolute top-4 right-2 w-2 h-2 bg-red-500 rounded-full" />
-          )}
+      ) : (
+        /* --- HIỂN THỊ KHI KHÔNG CÓ THÔNG BÁO NÀO --- */
+        <div className="p-8 flex flex-col items-center justify-center text-center opacity-60">
+          <Bell size={32} className="text-slate-300 mb-3" />
+          <p className="text-sm font-medium text-slate-500">Chưa có thông báo mới</p>
+          <p className="text-xs text-slate-400 mt-1">Bạn đang dùng phiên bản mới nhất</p>
         </div>
-      ))}
-      <button className="w-full py-3 text-xs font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-t border-slate-100 transition-colors">
-        Xem tất cả thông báo
-      </button>
+      )}
     </div>
   );
 };
