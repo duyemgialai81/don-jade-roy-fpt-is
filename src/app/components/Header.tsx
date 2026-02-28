@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Settings, Search } from 'lucide-react';
+import { Bell, Settings, Clock, CloudSun } from 'lucide-react';
 import { HeaderDropdown, NotificationsList, SettingsList, UpdateInfo } from '../components/ui/HeaderDropdowns';
 
 // Import trực tiếp version từ package.json
@@ -21,7 +21,40 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
+    
+    // State cho thời gian và nhiệt độ
+    const [currentTime, setCurrentTime] = useState(new Date());
+    const [temperature, setTemperature] = useState<number | null>(null);
 
+    // Đồng hồ thời gian thực
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Lấy nhiệt độ thực tế (Sử dụng Open-Meteo API miễn phí, tọa độ Hà Nội)
+    useEffect(() => {
+        const fetchWeather = async () => {
+            try {
+                // Tọa độ Hà Nội: lat 21.0285, long 105.8542
+                const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current_weather=true');
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.current_weather) {
+                    setTemperature(data.current_weather.temperature);
+                }
+            } catch (error) {
+                console.error("Lỗi khi lấy dữ liệu thời tiết:", error);
+            }
+        };
+
+        fetchWeather();
+        // Cập nhật thời tiết mỗi 30 phút
+        const weatherTimer = setInterval(fetchWeather, 30 * 60 * 1000);
+        return () => clearInterval(weatherTimer);
+    }, []);
+
+    // Kiểm tra cập nhật hệ thống
     useEffect(() => {
         const isElectron = navigator.userAgent.toLowerCase().includes('electron');
         if (!isElectron) return; 
@@ -74,14 +107,23 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
             </div>
             
             <div className="flex items-center gap-4">
-                 <div className="hidden md:flex items-center relative group">
-                    <Search className="absolute left-3 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Tìm kiếm..." 
-                      className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200/80 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-64 shadow-sm hover:bg-white focus:bg-white"
-                    />
-                 </div>
+                {/* HIỂN THỊ THỜI GIAN & NHIỆT ĐỘ */}
+                <div className="hidden md:flex items-center gap-4 bg-slate-50 border border-slate-200/80 rounded-full px-4 py-2 shadow-sm transition-all hover:bg-white hover:shadow-md">
+                    <div className="flex items-center gap-2 text-slate-600">
+                        <Clock size={16} className="text-indigo-500" />
+                        <span className="text-sm font-semibold tracking-wide">
+                            {currentTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    </div>
+                    <div className="w-[1px] h-4 bg-slate-200" />
+                    <div className="flex items-center gap-2 text-slate-600">
+                        <CloudSun size={16} className="text-orange-500" />
+                        <span className="text-sm font-semibold">
+                            {temperature !== null ? `${temperature}°C` : '--°C'}
+                        </span>
+                    </div>
+                </div>
+
                 <div className="h-8 w-[1px] bg-slate-200 mx-2 hidden sm:block" />
                 
                 {/* NÚT THÔNG BÁO */}
