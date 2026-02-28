@@ -1,6 +1,6 @@
-import React from 'react';
-import { LayoutDashboard, Activity, Rocket, Server, Box, ChevronRight, ChevronsUpDown } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { LayoutDashboard, Activity, Rocket, Database, Box, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { EnvType } from '../../utils/config';
 
 interface SidebarProps {
@@ -11,11 +11,33 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, currentEnv, onEnvChange }) => {
+  const [isEnvOpen, setIsEnvOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const menuItems = [
     { id: 'create', label: 'Quản lý Dashboard', icon: LayoutDashboard },
     { id: 'check', label: 'Kiểm tra trạng thái', icon: Activity },
     { id: 'push', label: 'Đẩy dữ liệu', icon: Rocket },
   ];
+
+  const envOptions = [
+    { value: 'dev', label: 'Development' },
+    { value: 'demo', label: 'Demo Environment' },
+    { value: 'prod', label: 'Production' },
+  ];
+
+  const currentEnvLabel = envOptions.find(e => e.value === currentEnv)?.label || 'Production';
+
+  // Xử lý click ra ngoài để đóng dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsEnvOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <aside className="w-[280px] bg-white/60 backdrop-blur-2xl border-r border-slate-200/50 flex flex-col h-full flex-shrink-0 relative z-20 shadow-[8px_0_24px_-12px_rgba(0,0,0,0.02)]">
@@ -85,23 +107,52 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, curren
 
       {/* Footer / Settings */}
       <div className="p-4 space-y-3">
-        {/* Environment Selector */}
-        <div className="bg-slate-100/50 rounded-xl p-1.5 border border-slate-200/50 flex flex-col">
-          <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 pt-2 pb-1">
-            <Server size={12} /> Môi trường
-          </label>
-          <div className="relative group">
-            <select 
-              className="w-full pl-3 pr-8 py-2 bg-transparent text-sm text-slate-700 font-semibold focus:outline-none appearance-none cursor-pointer"
-              value={currentEnv}
-              onChange={(e) => onEnvChange(e.target.value as EnvType)}
-            >
-              <option value="dev">Development</option>
-              <option value="demo">Demo Environment</option>
-              <option value="prod">Production</option>
-            </select>
-            <ChevronsUpDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none group-hover:text-slate-600 transition-colors" />
+        {/* Custom Environment Selector */}
+        <div className="relative" ref={dropdownRef}>
+          <div 
+            onClick={() => setIsEnvOpen(!isEnvOpen)}
+            className={`bg-slate-50/80 hover:bg-slate-100/80 rounded-xl p-2.5 border transition-all duration-200 cursor-pointer ${isEnvOpen ? 'border-indigo-300 shadow-sm' : 'border-slate-200/60'}`}
+          >
+            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 cursor-pointer">
+              <Database size={12} strokeWidth={2.5} /> Môi trường
+            </label>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-sm text-slate-800 font-semibold">{currentEnvLabel}</span>
+              <ChevronsUpDown size={14} className={`text-slate-400 transition-transform duration-300 ${isEnvOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+            </div>
           </div>
+
+          <AnimatePresence>
+            {isEnvOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute left-0 bottom-full w-full mb-2 bg-white border border-slate-200 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-lg overflow-hidden z-50 py-1"
+              >
+                {envOptions.map((option) => {
+                  const isSelected = currentEnv === option.value;
+                  return (
+                    <div
+                      key={option.value}
+                      className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
+                        isSelected 
+                          ? 'bg-[#1a73e8] text-white font-medium' // Màu xanh dương đậm như trong ảnh chụp
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                      onClick={() => {
+                        onEnvChange(option.value as EnvType);
+                        setIsEnvOpen(false);
+                      }}
+                    >
+                      {option.label}
+                    </div>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* User Profile */}
