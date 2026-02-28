@@ -4,7 +4,7 @@ import { Bell, Settings, Search, X, DownloadCloud } from 'lucide-react';
 import { NotificationsList, SettingsList } from './ui/HeaderDropdowns';
 
 // Import trực tiếp version từ package.json
-// Lưu ý: Sửa lại đường dẫn '../../package.json' cho đúng với vị trí file Header.tsx của bạn
+// Lưu ý: Kiểm tra lại đường dẫn import này cho đúng với cấu trúc thư mục của bạn
 import pkg from '../../../package.json'; 
 
 interface HeaderProps {
@@ -12,10 +12,10 @@ interface HeaderProps {
     titles: Record<string, string>;
 }
 
-// CẤU HÌNH THÔNG TIN REPO GITHUB CỦA BẠN
+// ĐÃ CẬP NHẬT THÔNG TIN REPO GITHUB MỚI CỦA BẠN
 const GITHUB_OWNER = 'duyemgialai81'; 
-const GITHUB_REPO = 'FPT-IS'; 
-const CURRENT_VERSION = `v${pkg.version}`; // Sẽ tự động lấy 'v1.0.0', 'v1.0.1', v.v.
+const GITHUB_REPO = 'don-jade-roy-fpt-is'; 
+const CURRENT_VERSION = `v${pkg.version}`; 
 
 interface UpdateInfo {
     version: string;
@@ -30,22 +30,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
 
     // --- LOGIC KIỂM TRA UPDATE TỪ GITHUB ---
     useEffect(() => {
-        // 1. Kiểm tra xem có phải đang chạy trên Electron (.exe) không
         const isElectron = navigator.userAgent.toLowerCase().includes('electron');
-        if (!isElectron) return; // Nếu đang chạy Web (localhost) thì bỏ qua
+        if (!isElectron) return; 
 
-        // 2. Gọi API GitHub để lấy release mới nhất
         const checkUpdate = async () => {
             try {
                 const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`);
                 if (!response.ok) return;
 
                 const data = await response.json();
-                const latestVersion = data.tag_name; // Trả về dạng 'v1.0.1'
+                const latestVersion = data.tag_name; 
 
-                // Nếu version trên GitHub khác version hiện tại -> Có bản mới
                 if (latestVersion && latestVersion !== CURRENT_VERSION) {
-                    // Tìm link tải file .exe trong danh sách assets mà GitHub Actions vừa upload
                     const exeAsset = data.assets.find((asset: any) => asset.name.endsWith('.exe'));
                     
                     setUpdateAvailable({
@@ -105,7 +101,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                     className={`p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-white bg-slate-100/50 rounded-full transition-all duration-300 shadow-sm hover:shadow active:scale-95 relative group ${isNotificationsOpen ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-100' : ''}`}
                   >
                     <Bell size={20} />
-                    {/* Notification Badge: Sáng lên nếu có thông báo mới HOẶC có bản cập nhật */}
                     {(updateAvailable) && (
                         <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white animate-pulse" />
                     )}
@@ -157,7 +152,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                                 </div>
                             )}
 
-                            {/* Danh sách thông báo cũ của bạn */}
+                            {/* Danh sách thông báo cũ */}
                             <NotificationsList />
                           </div>
                         </motion.div>
