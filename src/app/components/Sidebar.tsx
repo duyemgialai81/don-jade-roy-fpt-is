@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LayoutDashboard, Activity, Rocket, Database, Box, ChevronRight, ChevronsUpDown } from 'lucide-react';
+// 1. ĐÃ THÊM ICON 'Globe' VÀO ĐÂY
+import { LayoutDashboard, Activity, Rocket, Database, Box, ChevronRight, ChevronsUpDown, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EnvType } from '../../utils/config';
 
@@ -14,10 +15,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, curren
   const [isEnvOpen, setIsEnvOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // 2. ĐÃ THÊM TAB MỚI VÀO MẢNG NÀY
   const menuItems = [
     { id: 'create', label: 'Quản lý Dashboard', icon: LayoutDashboard },
     { id: 'check', label: 'Kiểm tra trạng thái', icon: Activity },
     { id: 'push', label: 'Đẩy dữ liệu', icon: Rocket },
+    { id: 'autologin', label: 'Đăng nhập Cốc Cốc', icon: Globe }, // <-- TAB MỚI NẰM Ở ĐÂY
   ];
 
   const envOptions = [
@@ -138,7 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, curren
                       key={option.value}
                       className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
                         isSelected 
-                          ? 'bg-[#1a73e8] text-white font-medium' // Màu xanh dương đậm như trong ảnh chụp
+                          ? 'bg-[#1a73e8] text-white font-medium' 
                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                       }`}
                       onClick={() => {

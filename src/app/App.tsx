@@ -5,6 +5,8 @@ import { Header } from './components/Header';
 import { DashboardManager } from './components/tabs/DashboardManager';
 import { StatusChecker } from './components/tabs/StatusChecker';
 import { DataPusher } from './components/tabs/DataPusher';
+// 1. IMPORT COMPONENT MỚI VÀO ĐÂY
+import { AutoLogin } from './components/tabs/AutoLogin'; 
 import { EnvType } from '../utils/config';
 
 export default function App() {
@@ -12,10 +14,12 @@ export default function App() {
   const [globalToken, setGlobalToken] = useState('');
   const [currentEnv, setCurrentEnv] = useState<EnvType>('prod');
 
+  // 2. THÊM TIÊU ĐỀ CHO TAB MỚI ĐỂ HIỂN THỊ TRÊN HEADER
   const titles: Record<string, string> = {
     'create': 'Quản lý Dashboard',
     'check': 'Kiểm tra trạng thái',
-    'push': 'Đẩy dữ liệu hệ thống'
+    'push': 'Đẩy dữ liệu hệ thống',
+    'autologin': 'Đăng nhập Cốc Cốc hàng loạt'
   };
 
   return (
@@ -73,6 +77,19 @@ export default function App() {
                    transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
                  >
                    <DataPusher globalToken={globalToken} />
+                 </motion.div>
+               )}
+
+               {/* 3. THÊM KHỐI HIỂN THỊ CHO TAB AUTO LOGIN */}
+               {activeTab === 'autologin' && (
+                 <motion.div
+                   key="autologin"
+                   initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
+                   animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                   exit={{ opacity: 0, y: -20, filter: 'blur(4px)' }}
+                   transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                 >
+                   <AutoLogin />
                  </motion.div>
                )}
              </AnimatePresence>
