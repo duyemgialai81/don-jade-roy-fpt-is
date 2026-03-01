@@ -88,15 +88,13 @@ autoUpdater.on('error', (error) => {
 
 // --- PHẦN 2: TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC ---
 
+// --- PHẦN 2: TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC (CẢI TIẾN ẨN DANH) ---
+
 ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
   const emailsToProcess = emails.filter(e => e.trim() !== '').slice(0, 5);
   
-  if (emailsToProcess.length === 0) {
-    if (win) win.webContents.send('auto-login-status', { type: 'error', msg: 'Danh sách email trống!' });
-    return;
-  }
+  if (emailsToProcess.length === 0) return;
 
-  // Tìm đường dẫn file chạy của Cốc Cốc trên Windows
   const username = os.userInfo().username;
   const cocCocPaths = [
     `C:\\Users\\${username}\\AppData\\Local\\CocCoc\\Browser\\Application\\browser.exe`,
@@ -125,14 +123,16 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
       const guestToken = response.data.access_token;
       if (!guestToken) throw new Error("Không lấy được access_token từ API");
 
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang mượn tài khoản Master để lót đường...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang đăng nhập ngầm để lót đường...` });
 
-      // 2. Mở trình duyệt Cốc Cốc
+      // ====================================================================
+      // 2. MỞ CỐC CỐC ẨN DANH (THU NHỎ DƯỚI TASKBAR)
+      // ====================================================================
       const browser = await puppeteer.launch({
         executablePath: executablePath,
         headless: false, 
         defaultViewport: null, 
-        args: ['--start-maximized'] 
+        args: ['--start-minimized'] // Lệnh này giúp trình duyệt ẩn đi khi khởi động
       });
 
       const pages = await browser.pages();
@@ -164,16 +164,12 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
         if (loginBtn) loginBtn.click();
       });
 
-      // Đợi trang chuyển hướng vào bên trong (Thành công mượn Session)
+      // Đợi trang chuyển hướng vào bên trong
       await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
 
       if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Bơm Token của ${email} vào Cookies...` });
 
-      // ====================================================================
-      // 5. PHÉP THUẬT: TIÊM TOKEN VÀO COOKIES (Dựa trên ảnh thực tế)
-      // ====================================================================
-      
-      // Bơm vào domain .fpt.com
+      // 5. TIÊM TOKEN VÀO COOKIES
       await page.setCookie({
         name: 'access_token',
         value: guestToken,
@@ -183,7 +179,6 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
         httpOnly: true     
       });
 
-      // Bơm thêm vào domain eaccount.kyta.fpt.com cho chắc ăn tuyệt đối
       await page.setCookie({
         name: 'access_token',
         value: guestToken,
@@ -193,17 +188,28 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
         httpOnly: true
       });
 
-      // Quét dọn bộ nhớ LocalStorage để ép trang web tải lại thông tin User mới
       await page.evaluate(() => {
         localStorage.clear();
         sessionStorage.clear();
       });
 
-      // ====================================================================
       // 6. RELOAD VÀ VÀO THẲNG TRANG PROFILE CỦA KHÁCH
-      // ====================================================================
       await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'networkidle2' });
       
+      // ====================================================================
+      // 7. PHÓNG TO VÀ GỌI CỬA SỔ LÊN TRÊN CÙNG MÀN HÌNH
+      // ====================================================================
+      try {
+        const session = await page.target().createCDPSession();
+        const { windowId } = await session.send('Browser.getWindowForTarget');
+        // Ép Cốc Cốc phải Phóng to toàn màn hình
+        await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'maximized' } });
+        // Kéo cửa sổ lên trên cùng để đè lên các ứng dụng khác
+        await page.bringToFront(); 
+      } catch (err) {
+        console.error("Không thể phóng to cửa sổ:", err);
+      }
+
       if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Mở thành công tài khoản: ${email}` });
 
     } catch (error) {
