@@ -58,15 +58,16 @@ app.on('window-all-closed', () => {
 // CẤU HÌNH TÀI KHOẢN LẤY TOKEN (TÀI KHOẢN HIẾU)
 // ==========================================
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
-const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
+const TOKEN_PASS = 'Lehieu1993'; // Đã cập nhật theo ảnh Postman
 
 // ==========================================
 // HÀM LẤY TOKEN NGẦM TỪ TRANG ECONTRACT (1 BƯỚC)
+// Lấy chuẩn từ Cookie theo đúng ảnh số 5
 // ==========================================
 async function fetchMasterToken(executablePath) {
   const browser = await puppeteer.launch({
     executablePath: executablePath,
-    headless: true, // Để True chạy ngầm cho êm
+    headless: false, // Tạm thời để popup mở lên để bạn xem nó chạy
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox', 
@@ -82,57 +83,40 @@ async function fetchMasterToken(executablePath) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     await page.setCacheEnabled(false);
     
-    // Nới lỏng thời gian chờ mạng
+    // 1. Truy cập trang login
     await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await new Promise(r => setTimeout(r, 3000)); // Chờ form Angular load
 
-    // Ép tool đợi hẳn 5 giây để chắc chắn giao diện Angular tải xong 100%
-    await new Promise(r => setTimeout(r, 5000));
+    // 2. Điền Email (Dùng đúng id="email" như ảnh F12)
+    await page.waitForSelector('#email', { visible: true, timeout: 15000 });
+    await page.type('#email', TOKEN_EMAIL, { delay: 50 });
 
-    // Nhập Email
-    await page.waitForSelector('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', { visible: true, timeout: 15000 });
-    await page.type('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', TOKEN_EMAIL, { delay: 100 });
+    // 3. Điền Mật khẩu (Dùng đúng id="pass" như ảnh F12)
+    await page.waitForSelector('#pass', { visible: true });
+    await page.type('#pass', TOKEN_PASS, { delay: 50 });
 
-    // Nhập Mật khẩu
-    await page.waitForSelector('input[id="pass"], input[formcontrolname="password"], input[type="password"]', { visible: true });
-    await page.type('input[id="pass"], input[formcontrolname="password"], input[type="password"]', TOKEN_PASS, { delay: 100 });
-
-    // Click nút Đăng nhập
+    // 4. Click Đăng nhập
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button'));
       const loginBtn = btns.find(b => b.innerText && b.innerText.toLowerCase().includes('đăng nhập'));
       if (loginBtn) loginBtn.click();
     });
 
-    // Chờ load xong
+    // 5. Chờ hệ thống FPT chuyển trang và Set Cookie
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, 3000)); // Nghỉ 3s cho chắc chắn
 
-    // MOI TOKEN VÀ RỬA SẠCH DẤU NGOẶC KÉP
-    let token = await page.evaluate(() => {
-      let raw = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || localStorage.getItem('token');
-      if (raw) {
-        try {
-          let parsed = JSON.parse(raw);
-          if (parsed && parsed.access_token) return parsed.access_token;
-        } catch(e) {}
-        // Chặn dấu ngoặc thừa
-        return raw.replace(/^"|"$/g, '');
-      }
-      return null;
-    });
-
-    if (!token) {
-      const cookies = await page.cookies();
-      const tokenCookie = cookies.find(c => c.name === 'access_token' || c.name.toLowerCase().includes('token'));
-      if (tokenCookie) {
-        token = tokenCookie.value.replace(/^"|"$/g, '').replace('Bearer ', '').trim();
-      }
-    }
+    // 6. MOI TOKEN TỪ COOKIE BẰNG ĐÚNG TÊN 'access_token'
+    const cookies = await page.cookies();
+    const tokenCookie = cookies.find(c => c.name === 'access_token');
 
     await browser.close();
     
-    if (!token) throw new Error("Đăng nhập xong nhưng không trích xuất được token.");
-    return token;
+    if (!tokenCookie || !tokenCookie.value) {
+      throw new Error("Không tìm thấy Cookie access_token! Kiểm tra lại thông tin đăng nhập.");
+    }
+
+    return tokenCookie.value;
     
   } catch (error) {
     if (browser) await browser.close();
@@ -190,17 +174,17 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
 
   let masterToken = '';
   
-  // BƯỚC 1: LẤY TOKEN NGẦM BẰNG TÀI KHOẢN HIẾU
+  // BƯỚC 1: LẤY TOKEN BẰNG TÀI KHOẢN HIẾU
   try {
     if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang đăng nhập ngầm tài khoản ${TOKEN_EMAIL} để lấy Token...` });
     masterToken = await fetchMasterToken(executablePath);
     
-    // In preview ra để xem Token sạch chưa
+    // In preview ra để check
     let previewToken = masterToken.substring(0, 20) + '...';
-    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token Hiếu thành công [${previewToken}]. Bắt đầu xử lý ${emailsToProcess.length} tài khoản khách...` });
+    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token thành công [${previewToken}]. Bắt đầu xử lý khách...` });
   } catch (error) {
     if (win) win.webContents.send('auto-login-status', { type: 'error', msg: `Lấy Token tự động thất bại: ${error.message}` });
-    return; // Ngừng chạy nếu không có token
+    return; 
   }
 
   // BƯỚC 2: XỬ LÝ TỪNG TÀI KHOẢN KHÁCH VÀ LÓT ĐƯỜNG
@@ -209,7 +193,7 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
     try {
       if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang gọi API lấy token cho khách: ${email}...` });
 
-      // GỌI API BẰNG TOKEN CỦA HIẾU KÈM HEADER CHUẨN ĐỂ TRÁNH LỖI 401
+      // GỌI API BẰNG TOKEN CỦA HIẾU
       const response = await axios.get(`https://econtract.fpt.com/app/services/uaa/api/authentication/internal?login=${email}`, {
         headers: { 
           'Authorization': `Bearer ${masterToken}`,
@@ -221,9 +205,7 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
 
       if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang mở Cốc Cốc lót đường bằng Customer Support...` });
 
-      // ====================================================================
-      // 2. MỞ CỐC CỐC ẨN DANH (THU NHỎ DƯỚI TASKBAR)
-      // ====================================================================
+      // MỞ CỐC CỐC ẨN DANH (THU NHỎ DƯỚI TASKBAR)
       const browser = await puppeteer.launch({
         executablePath: executablePath,
         headless: false, 
@@ -234,10 +216,10 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
       const pages = await browser.pages();
       const page = pages[0];
 
-      // 3. TRUY CẬP TRANG LOGIN CŨ ĐỂ LÓT ĐƯỜNG
+      // TRUY CẬP TRANG LOGIN CŨ ĐỂ LÓT ĐƯỜNG
       await page.goto('https://eaccount.kyta.fpt.com/login', { waitUntil: 'networkidle2' });
 
-      // 4. KỊCH BẢN TỰ ĐỘNG GÕ PHÍM ĐĂNG NHẬP BẰNG CUSTOMER SUPPORT (2 BƯỚC)
+      // ĐĂNG NHẬP BẰNG CUSTOMER SUPPORT (2 BƯỚC)
       await page.waitForSelector('input[type="email"], input[placeholder*="email" i]', { visible: true });
       await page.type('input[type="email"], input[placeholder*="email" i]', 'customersuport@gmail.com', { delay: 50 });
 
@@ -256,12 +238,12 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
         if (loginBtn) loginBtn.click();
       });
 
-      // Đợi trang chuyển hướng vào bên trong
+      // Đợi trang chuyển hướng
       await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
 
       if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Bơm Token của khách (${email}) vào Cookies...` });
 
-      // 5. TIÊM TOKEN VÀO COOKIES
+      // TIÊM TOKEN CỦA KHÁCH VÀO COOKIES
       await page.setCookie({
         name: 'access_token',
         value: guestToken,
@@ -285,18 +267,14 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
         sessionStorage.clear();
       });
 
-      // 6. RELOAD VÀ VÀO THẲNG TRANG PROFILE CỦA KHÁCH
+      // RELOAD VÀ VÀO THẲNG TRANG PROFILE CỦA KHÁCH
       await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'networkidle2' });
       
-      // ====================================================================
-      // 7. PHÓNG TO VÀ GỌI CỬA SỔ LÊN TRÊN CÙNG MÀN HÌNH
-      // ====================================================================
+      // PHÓNG TO VÀ GỌI CỬA SỔ LÊN TRÊN CÙNG MÀN HÌNH
       try {
         const session = await page.target().createCDPSession();
         const { windowId } = await session.send('Browser.getWindowForTarget');
-        // Ép Cốc Cốc phải Phóng to toàn màn hình
         await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'maximized' } });
-        // Kéo cửa sổ lên trên cùng để đè lên các ứng dụng khác
         await page.bringToFront(); 
       } catch (err) {
         console.error("Không thể phóng to cửa sổ:", err);
