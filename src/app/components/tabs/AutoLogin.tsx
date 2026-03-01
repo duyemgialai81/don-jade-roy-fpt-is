@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, Info, X } from 'lucide-react';
+import { AlertCircle, Info, X, Key, Mail, Terminal, Loader2, Rocket } from 'lucide-react';
 
 // Khai báo an toàn ipcRenderer
 const ipcRenderer = typeof window !== 'undefined' && window.require 
@@ -17,7 +17,6 @@ let cachedData = {
   statusLogs: [] as {type: string, msg: string}[]
 };
 
-// Khai báo kiểu dữ liệu cho Modal
 type ModalType = 'alert' | 'confirm';
 interface ModalState {
   isOpen: boolean;
@@ -28,18 +27,21 @@ interface ModalState {
 }
 
 export const AutoLogin = () => {
-  // Lấy dữ liệu từ bộ nhớ tạm để khởi tạo thay vì để trống
   const [emails, setEmails] = useState(cachedData.emails);
   const [masterToken, setMasterToken] = useState(cachedData.masterToken);
   const [statusLogs, setStatusLogs] = useState<{type: string, msg: string}[]>(cachedData.statusLogs);
   const [isLoading, setIsLoading] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Lưu lại vào bộ nhớ tạm ngay mỗi khi người dùng gõ phím
+  // Tự động cuộn xuống cuối khi có log mới
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [statusLogs]);
+
   useEffect(() => { cachedData.emails = emails; }, [emails]);
   useEffect(() => { cachedData.masterToken = masterToken; }, [masterToken]);
   useEffect(() => { cachedData.statusLogs = statusLogs; }, [statusLogs]);
 
-  // State quản lý Cửa sổ thông báo (Modal)
   const [modal, setModal] = useState<ModalState>({
     isOpen: false,
     type: 'alert',
@@ -47,12 +49,10 @@ export const AutoLogin = () => {
     message: ''
   });
 
-  // Hàm hiển thị Alert (Chỉ có nút Đóng)
   const showAlert = (title: string, message: string) => {
     setModal({ isOpen: true, type: 'alert', title, message });
   };
 
-  // Hàm hiển thị Confirm (Có Xác nhận & Hủy)
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
     setModal({ isOpen: true, type: 'confirm', title, message, onConfirm });
   };
@@ -81,12 +81,11 @@ export const AutoLogin = () => {
     };
   }, []);
 
-  // Hàm thực thi chạy thực tế sau khi người dùng bấm "Xác nhận"
   const executeLogin = (emailList: string[]) => {
     closeModal();
     setIsLoading(true);
     setStatusLogs([]);
-    cachedData.statusLogs = []; // Xóa log trong cache khi bắt đầu chạy mới
+    cachedData.statusLogs = []; 
     ipcRenderer.send('auto-login-coccoc', { emails: emailList, masterToken });
   };
 
@@ -119,54 +118,118 @@ export const AutoLogin = () => {
   };
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border border-slate-200 relative">
-      <h2 className="text-xl font-bold text-slate-800 mb-4">Mở luồng tài khoản khách (Cốc Cốc)</h2>
-      
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Master Token (Bearer ...)</label>
-          <input 
-            type="text" 
-            value={masterToken}
-            onChange={(e) => setMasterToken(e.target.value)}
-            placeholder="eyJhbGciOiJIUzI1NiIs..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
-          />
-        </div>
+    <div className="max-w-2xl mx-auto p-8 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-violet-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Danh sách Email (Mỗi dòng 1 email, Tối đa 5)</label>
-          <textarea 
-            value={emails}
-            onChange={(e) => setEmails(e.target.value)}
-            placeholder="nguyenvana@gmail.com&#10;tranvanb@yahoo.com"
-            rows={5}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-          />
-        </div>
-
-        <button 
-          onClick={handleStartLogin}
-          disabled={isLoading}
-          className={`w-full py-2.5 rounded-lg font-semibold text-white transition-colors shadow-sm ${isLoading ? 'bg-indigo-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99]'}`}
-        >
-          {isLoading ? '⏳ Đang thao tác ngầm, vui lòng đợi...' : '🚀 Bắt đầu đăng nhập hàng loạt'}
-        </button>
-
-        {statusLogs.length > 0 && (
-          <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg h-32 overflow-y-auto">
-            {statusLogs.map((log, idx) => (
-              <div key={idx} className={`text-sm mb-1 ${
-                log.type === 'error' ? 'text-red-600 font-medium' : 
-                log.type === 'success' ? 'text-emerald-600 font-medium' : 'text-slate-600'
-              }`}>
-                • {log.msg}
+      <div className="relative z-10">
+        <h2 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent mb-6 flex items-center gap-2">
+          <Terminal size={28} className="text-indigo-600" />
+          Auto Login Cốc Cốc
+        </h2>
+        
+        <div className="space-y-6">
+          {/* Master Token Input */}
+          <div className="group">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
+              Master Token <span className="text-slate-400 font-normal">(Bearer ...)</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Key size={18} className="text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
               </div>
-            ))}
+              <input 
+                type="text" 
+                value={masterToken}
+                onChange={(e) => setMasterToken(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none font-mono text-sm text-slate-700 shadow-sm"
+              />
+            </div>
           </div>
-        )}
+
+          {/* Emails Input */}
+          <div className="group">
+            <label className="block text-sm font-semibold text-slate-700 mb-2 flex justify-between items-end">
+              <span>Danh sách Email</span>
+              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-md">Tối đa 5 tài khoản</span>
+            </label>
+            <div className="relative">
+              <div className="absolute top-3.5 left-0 pl-3.5 pointer-events-none">
+                <Mail size={18} className="text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+              </div>
+              <textarea 
+                value={emails}
+                onChange={(e) => setEmails(e.target.value)}
+                placeholder="nguyenvana@gmail.com&#10;tranvanb@yahoo.com"
+                rows={5}
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none text-sm text-slate-700 shadow-sm resize-none leading-relaxed"
+              />
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <button 
+            onClick={handleStartLogin}
+            disabled={isLoading}
+            className={`w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all duration-300 shadow-md ${
+              isLoading 
+                ? 'bg-indigo-400 cursor-not-allowed shadow-none' 
+                : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99]'
+            }`}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                Đang thao tác ngầm, vui lòng đợi...
+              </>
+            ) : (
+              <>
+                <Rocket size={20} />
+                Bắt đầu đăng nhập hàng loạt
+              </>
+            )}
+          </button>
+
+          {/* Log Area */}
+          <AnimatePresence>
+            {statusLogs.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-6 bg-slate-900 rounded-xl border border-slate-800 shadow-inner overflow-hidden flex flex-col"
+              >
+                <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-800 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <span className="text-xs text-slate-400 ml-2 font-mono">Process Logs</span>
+                </div>
+                <div className="p-4 h-40 overflow-y-auto font-mono text-sm space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                  {statusLogs.map((log, idx) => (
+                    <motion.div 
+                      key={idx}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`${
+                        log.type === 'error' ? 'text-red-400' : 
+                        log.type === 'success' ? 'text-emerald-400' : 'text-slate-300'
+                      }`}
+                    >
+                      <span className="text-slate-600 mr-2">{'>'}</span>
+                      {log.msg}
+                    </motion.div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
+      {/* Modal Overlay */}
       <AnimatePresence>
         {modal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -175,46 +238,53 @@ export const AutoLogin = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeModal}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
             
             <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative z-10 overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: "spring", bounce: 0.3, duration: 0.4 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative z-10 overflow-hidden border border-slate-100"
             >
-              <div className={`p-4 border-b flex items-center gap-3 ${modal.type === 'alert' ? 'bg-amber-50/50 border-amber-100' : 'bg-indigo-50/50 border-indigo-100'}`}>
+              <div className={`p-5 flex items-center gap-3 ${modal.type === 'alert' ? 'bg-amber-50' : 'bg-indigo-50'}`}>
                 {modal.type === 'alert' ? (
-                  <AlertCircle className="text-amber-500" size={24} />
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-full">
+                    <AlertCircle size={24} />
+                  </div>
                 ) : (
-                  <Info className="text-indigo-500" size={24} />
+                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-full">
+                    <Info size={24} />
+                  </div>
                 )}
-                <h3 className="font-bold text-slate-800 text-lg">{modal.title}</h3>
-                <button onClick={closeModal} className="ml-auto text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1 rounded-md transition-colors">
+                <h3 className="font-bold text-slate-800 text-lg flex-1">{modal.title}</h3>
+                <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 p-1.5 rounded-lg transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               <div className="p-6">
-                <p className="text-slate-600 whitespace-pre-line leading-relaxed text-sm">
+                <p className="text-slate-600 whitespace-pre-line leading-relaxed text-[15px]">
                   {modal.message}
                 </p>
               </div>
 
-              <div className="p-4 bg-slate-50 flex justify-end gap-3">
+              <div className="p-5 bg-slate-50/80 border-t border-slate-100 flex justify-end gap-3">
                 {modal.type === 'confirm' && (
                   <button 
                     onClick={closeModal}
-                    className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-lg transition-colors"
+                    className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors"
                   >
                     Hủy bỏ
                   </button>
                 )}
                 <button 
                   onClick={modal.type === 'confirm' ? modal.onConfirm : closeModal}
-                  className={`px-4 py-2 text-sm font-semibold text-white rounded-lg transition-colors shadow-sm ${
-                    modal.type === 'confirm' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-500 hover:bg-amber-600'
+                  className={`px-6 py-2.5 text-sm font-bold text-white rounded-xl transition-all shadow-sm ${
+                    modal.type === 'confirm' 
+                      ? 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md hover:-translate-y-0.5' 
+                      : 'bg-amber-500 hover:bg-amber-600 hover:shadow-md hover:-translate-y-0.5'
                   }`}
                 >
                   {modal.type === 'confirm' ? 'Xác nhận' : 'Đã hiểu'}
