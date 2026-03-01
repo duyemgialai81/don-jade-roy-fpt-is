@@ -60,43 +60,52 @@ app.on('window-all-closed', () => {
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
 const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
 
+// ==========================================
+// HÀM LẤY TOKEN NGẦM TỪ TRANG ECONTRACT (1 BƯỚC)
+// ==========================================
 async function fetchMasterToken(executablePath) {
   const browser = await puppeteer.launch({
     executablePath: executablePath,
-    headless: true, // Đổi thành false nếu bạn muốn nhìn thấy nó tự động gõ phím để debug
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,800']
+    // BẬT LÊN FALSE TẠM THỜI ĐỂ DEBUG XEM NÓ BỊ KẸT Ở MÀN HÌNH NÀO
+    headless: false, 
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox', 
+      '--window-size=1280,800',
+      '--disable-blink-features=AutomationControlled' // Bypass hệ thống chống Bot cơ bản
+    ]
   });
 
   try {
     const page = await browser.newPage();
     
-    // Bật chế độ bỏ qua cache để tránh dính phiên đăng nhập cũ
+    // Đóng giả làm người dùng thật
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     await page.setCacheEnabled(false);
     
-    await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'networkidle2', timeout: 30000 });
+    // Nới lỏng thời gian chờ mạng
+    await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // QUAN TRỌNG: Chờ thêm 2 giây để Framework Angular kịp render hoàn chỉnh form ra màn hình
-    await new Promise(r => setTimeout(r, 2000));
+    // QUAN TRỌNG: Ép tool đợi hẳn 5 giây để chắc chắn giao diện Angular tải xong 100%
+    await new Promise(r => setTimeout(r, 5000));
 
-    // 1. Điền Email (Bắt cứng theo formcontrolname và id từ ảnh F12 của bạn)
-    await page.waitForSelector('input[formcontrolname="username"], #email', { visible: true, timeout: 15000 });
-    await page.type('input[formcontrolname="username"], #email', TOKEN_EMAIL, { delay: 50 });
+    // Dùng cách bắt selector rộng nhất có thể: Tìm BẤT KỲ ô input nào có chứa chữ email hoặc type là text/email
+    await page.waitForSelector('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', { visible: true, timeout: 15000 });
+    await page.type('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', TOKEN_EMAIL, { delay: 100 });
 
-    // 2. Điền Mật khẩu (Bắt cứng theo formcontrolname và id)
-    await page.waitForSelector('input[formcontrolname="password"], #pass', { visible: true });
-    await page.type('input[formcontrolname="password"], #pass', TOKEN_PASS, { delay: 50 });
+    // Tương tự với ô mật khẩu
+    await page.waitForSelector('input[id="pass"], input[formcontrolname="password"], input[type="password"]', { visible: true });
+    await page.type('input[id="pass"], input[formcontrolname="password"], input[type="password"]', TOKEN_PASS, { delay: 100 });
 
-    // 3. Click nút Đăng nhập
+    // Click nút Đăng nhập
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button'));
       const loginBtn = btns.find(b => b.innerText && b.innerText.toLowerCase().includes('đăng nhập'));
       if (loginBtn) loginBtn.click();
     });
 
-    // 4. Chờ load xong và moi Token
+    // Chờ load xong và moi Token
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-    
-    // Chờ thêm 3 giây để hệ thống kịp lưu token vào LocalStorage
     await new Promise(r => setTimeout(r, 3000));
 
     let token = await page.evaluate(() => {
@@ -111,12 +120,12 @@ async function fetchMasterToken(executablePath) {
 
     await browser.close();
     
-    if (!token) throw new Error("Đăng nhập xong nhưng không tìm thấy token trong Storage/Cookie. Có thể sai mật khẩu hoặc FPT đổi chỗ lưu.");
+    if (!token) throw new Error("Đăng nhập xong nhưng không trích xuất được token.");
     return token;
     
   } catch (error) {
     if (browser) await browser.close();
-    throw new Error(`Lỗi đăng nhập ngầm tài khoản ${TOKEN_EMAIL}: ${error.message}`);
+    throw new Error(`Lỗi đăng nhập tài khoản ${TOKEN_EMAIL}: ${error.message}`);
   }
 }
 // ==========================================
