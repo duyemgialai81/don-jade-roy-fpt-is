@@ -60,39 +60,44 @@ app.on('window-all-closed', () => {
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
 const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
 
-// ==========================================
-// HÀM LẤY TOKEN NGẦM TỪ TRANG ECONTRACT (1 BƯỚC)
-// ==========================================
 async function fetchMasterToken(executablePath) {
   const browser = await puppeteer.launch({
     executablePath: executablePath,
-    headless: true, // Chạy ngầm 100%
+    headless: true, // Đổi thành false nếu bạn muốn nhìn thấy nó tự động gõ phím để debug
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1280,800']
   });
 
   try {
     const page = await browser.newPage();
-    // Dùng trang đăng nhập mới của FPT
-    await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'networkidle2' });
+    
+    // Bật chế độ bỏ qua cache để tránh dính phiên đăng nhập cũ
+    await page.setCacheEnabled(false);
+    
+    await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // 1. Điền Email của Hiếu
-    await page.waitForSelector('input[type="email"], input[type="text"]', { visible: true, timeout: 10000 });
-    await page.type('input[type="email"], input[type="text"]', TOKEN_EMAIL, { delay: 50 });
+    // QUAN TRỌNG: Chờ thêm 2 giây để Framework Angular kịp render hoàn chỉnh form ra màn hình
+    await new Promise(r => setTimeout(r, 2000));
 
-    // 2. Điền Mật khẩu của Hiếu
-    await page.waitForSelector('input[type="password"]', { visible: true });
-    await page.type('input[type="password"]', TOKEN_PASS, { delay: 50 });
+    // 1. Điền Email (Bắt cứng theo formcontrolname và id từ ảnh F12 của bạn)
+    await page.waitForSelector('input[formcontrolname="username"], #email', { visible: true, timeout: 15000 });
+    await page.type('input[formcontrolname="username"], #email', TOKEN_EMAIL, { delay: 50 });
+
+    // 2. Điền Mật khẩu (Bắt cứng theo formcontrolname và id)
+    await page.waitForSelector('input[formcontrolname="password"], #pass', { visible: true });
+    await page.type('input[formcontrolname="password"], #pass', TOKEN_PASS, { delay: 50 });
 
     // 3. Click nút Đăng nhập
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button'));
-      const loginBtn = btns.find(b => b.innerText.toLowerCase().includes('đăng nhập'));
+      const loginBtn = btns.find(b => b.innerText && b.innerText.toLowerCase().includes('đăng nhập'));
       if (loginBtn) loginBtn.click();
     });
 
     // 4. Chờ load xong và moi Token
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-    await new Promise(r => setTimeout(r, 2000));
+    
+    // Chờ thêm 3 giây để hệ thống kịp lưu token vào LocalStorage
+    await new Promise(r => setTimeout(r, 3000));
 
     let token = await page.evaluate(() => {
       return localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || localStorage.getItem('token');
@@ -105,14 +110,15 @@ async function fetchMasterToken(executablePath) {
     }
 
     await browser.close();
-    if (!token) throw new Error("Không thể trích xuất token sau khi đăng nhập.");
+    
+    if (!token) throw new Error("Đăng nhập xong nhưng không tìm thấy token trong Storage/Cookie. Có thể sai mật khẩu hoặc FPT đổi chỗ lưu.");
     return token;
+    
   } catch (error) {
-    await browser.close();
+    if (browser) await browser.close();
     throw new Error(`Lỗi đăng nhập ngầm tài khoản ${TOKEN_EMAIL}: ${error.message}`);
   }
 }
-
 // ==========================================
 // KÊNH GIAO TIẾP VỚI GIAO DIỆN REACT (IPC)
 // ==========================================
