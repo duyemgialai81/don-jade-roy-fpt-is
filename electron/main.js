@@ -58,7 +58,7 @@ app.on('window-all-closed', () => {
 // CẤU HÌNH TÀI KHOẢN LẤY TOKEN (TÀI KHOẢN HIẾU)
 // ==========================================
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
-const TOKEN_PASS = 'MAT_KHAU_CUA_HIEU_O_DAY'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
+const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
 
 // ==========================================
 // HÀM LẤY TOKEN NGẦM TỪ TRANG ECONTRACT (1 BƯỚC)
