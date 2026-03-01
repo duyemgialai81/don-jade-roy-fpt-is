@@ -60,7 +60,6 @@ app.on('window-all-closed', () => {
 
 // --- PHẦN 1: CẬP NHẬT PHẦN MỀM (AUTO-UPDATE) ---
 
-// 1. Nhận lệnh tải cập nhật
 ipcMain.on('start-download', async () => {
   try {
     await autoUpdater.checkForUpdates();
@@ -70,22 +69,18 @@ ipcMain.on('start-download', async () => {
   }
 });
 
-// 2. Nhận lệnh cài đặt (isSilent = true để cài ngầm mượt mà)
 ipcMain.on('quit-and-install', () => {
   autoUpdater.quitAndInstall(true, true); 
 });
 
-// 3. Gửi phần trăm tải xuống
 autoUpdater.on('download-progress', (progressObj) => {
   if (win) win.webContents.send('download-progress', progressObj.percent);
 });
 
-// 4. Báo hiệu tải hoàn tất
 autoUpdater.on('update-downloaded', () => {
   if (win) win.webContents.send('update-downloaded');
 });
 
-// 5. Bắt lỗi
 autoUpdater.on('error', (error) => {
   if (win) win.webContents.send('update-error', error.message);
 });
@@ -94,7 +89,6 @@ autoUpdater.on('error', (error) => {
 // --- PHẦN 2: TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC ---
 
 ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
-  // Lọc email rỗng và giới hạn tối đa 5 tài khoản cùng lúc để tránh treo máy
   const emailsToProcess = emails.filter(e => e.trim() !== '').slice(0, 5);
   
   if (emailsToProcess.length === 0) {
@@ -136,7 +130,7 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
       // 2. Mở trình duyệt Cốc Cốc
       const browser = await puppeteer.launch({
         executablePath: executablePath,
-        headless: false, // Bật giao diện (false) để nhìn thấy web mở lên
+        headless: false, 
         defaultViewport: null, 
         args: ['--start-maximized'] 
       });
@@ -147,51 +141,67 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
       // 3. TRUY CẬP TRANG LOGIN
       await page.goto('https://eaccount.kyta.fpt.com/login', { waitUntil: 'networkidle2' });
 
-      // =========================================================================
-      // 4. KỊCH BẢN TỰ ĐỘNG GÕ PHÍM ĐĂNG NHẬP
-      // =========================================================================
-      
-      // 4.1. Đợi ô nhập Email xuất hiện
+      // 4. KỊCH BẢN TỰ ĐỘNG GÕ PHÍM ĐĂNG NHẬP (LÓT ĐƯỜNG)
       await page.waitForSelector('input[type="email"], input[placeholder*="email" i]', { visible: true });
       
-      // 🔴 SỬA TÀI KHOẢN Ở ĐÂY 🔴 (Thay hiennx3@fpt.com thành email của bạn)
+      // 🔴 SỬA TÀI KHOẢN MASTER Ở ĐÂY 🔴
       await page.type('input[type="email"], input[placeholder*="email" i]', 'customersuport@gmail.com', { delay: 50 });
 
-      // Tìm và bấm nút "Tiếp tục"
       await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         const nextBtn = btns.find(b => b.innerText.toLowerCase().includes('tiếp tục'));
         if (nextBtn) nextBtn.click();
       });
 
-      // 4.2. Chờ chuyển cảnh và hiện ô gõ mật khẩu
       await page.waitForSelector('input[type="password"]', { visible: true, timeout: 5000 });
       
-      // 🔴 SỬA MẬT KHẨU Ở ĐÂY 🔴 (Thay Fpt@1234 thành mật khẩu của bạn)
+      // 🔴 SỬA MẬT KHẨU MASTER Ở ĐÂY 🔴
       await page.type('input[type="password"]', 'thads@2025', { delay: 50 });
 
-      // Tìm và bấm nút "Đăng nhập" (Hoặc "Tiếp tục" lần 2)
       await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll('button'));
         const loginBtn = btns.find(b => b.innerText.toLowerCase().includes('tiếp tục') || b.innerText.toLowerCase().includes('đăng nhập'));
         if (loginBtn) loginBtn.click();
       });
 
-      // 4.3. Đợi trang chuyển hướng vào bên trong (Thành công mượn Session)
+      // Đợi trang chuyển hướng vào bên trong (Thành công mượn Session)
       await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
 
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Bơm Token của ${email} vào bộ nhớ...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Bơm Token của ${email} vào Cookies...` });
 
-      // 5. PHÉP THUẬT: TRÁO ĐỔI TOKEN VÀO LOCAL STORAGE
-      await page.evaluate((token) => {
-        // Lưu ý: Đa số web FPT yêu cầu token lưu dạng chuỗi JSON có ngoặc kép
-        localStorage.setItem('access_token', `"${token}"`); 
-        
-        // NẾU CHẠY MÀ BỊ VĂNG RA LOGIN THÌ XÓA DÒNG TRÊN VÀ MỞ DÒNG NÀY:
-        // localStorage.setItem('access_token', token);
-      }, guestToken);
+      // ====================================================================
+      // 5. PHÉP THUẬT: TIÊM TOKEN VÀO COOKIES (Dựa trên ảnh thực tế)
+      // ====================================================================
+      
+      // Bơm vào domain .fpt.com
+      await page.setCookie({
+        name: 'access_token',
+        value: guestToken,
+        domain: '.fpt.com', 
+        path: '/',
+        secure: true,      
+        httpOnly: true     
+      });
 
-      // 6. RELOAD VÀ VÀO THẲNG TRANG PROFILE (Lúc này web đã tưởng bạn là email khách hàng)
+      // Bơm thêm vào domain eaccount.kyta.fpt.com cho chắc ăn tuyệt đối
+      await page.setCookie({
+        name: 'access_token',
+        value: guestToken,
+        domain: 'eaccount.kyta.fpt.com',
+        path: '/',
+        secure: true,
+        httpOnly: true
+      });
+
+      // Quét dọn bộ nhớ LocalStorage để ép trang web tải lại thông tin User mới
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+
+      // ====================================================================
+      // 6. RELOAD VÀ VÀO THẲNG TRANG PROFILE CỦA KHÁCH
+      // ====================================================================
       await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'networkidle2' });
       
       if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Mở thành công tài khoản: ${email}` });
