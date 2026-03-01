@@ -122,41 +122,77 @@ ipcMain.on('auto-login-coccoc', async (event, { emails, masterToken }) => {
   for (let i = 0; i < emailsToProcess.length; i++) {
     const email = emailsToProcess[i].trim();
     try {
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang lấy token cho: ${email}...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang lấy token API cho: ${email}...` });
 
-      // 1. Gọi API để lấy Token của khách
+      // 1. Lấy Token của khách hàng từ API FPT
       const response = await axios.get(`https://econtract.fpt.com/app/services/uaa/api/authentication/internal?login=${email}`, {
         headers: { Authorization: `Bearer ${masterToken}` }
       });
       const guestToken = response.data.access_token;
-
       if (!guestToken) throw new Error("Không lấy được access_token từ API");
 
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Mở trình duyệt cho: ${email}...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang mượn tài khoản Master để lót đường...` });
 
-      // 2. Mở một cửa sổ Cốc Cốc hoàn toàn mới
+      // 2. Mở trình duyệt Cốc Cốc
       const browser = await puppeteer.launch({
         executablePath: executablePath,
         headless: false, // Bật giao diện (false) để nhìn thấy web mở lên
-        defaultViewport: null, // Mở full size nội dung
-        args: ['--start-maximized'] // Mở to cửa sổ
+        defaultViewport: null, 
+        args: ['--start-maximized'] 
       });
 
       const pages = await browser.pages();
       const page = pages[0];
 
-      // 3. Truy cập vào trang web để khởi tạo Local Storage
-      await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'domcontentloaded' });
+      // 3. TRUY CẬP TRANG LOGIN
+      await page.goto('https://eaccount.kyta.fpt.com/login', { waitUntil: 'networkidle2' });
 
-      // 4. Bơm Token thẳng vào Local Storage bằng DevTools ngầm
+      // =========================================================================
+      // 4. KỊCH BẢN TỰ ĐỘNG GÕ PHÍM ĐĂNG NHẬP
+      // =========================================================================
+      
+      // 4.1. Đợi ô nhập Email xuất hiện
+      await page.waitForSelector('input[type="email"], input[placeholder*="email" i]', { visible: true });
+      
+      // 🔴 SỬA TÀI KHOẢN Ở ĐÂY 🔴 (Thay hiennx3@fpt.com thành email của bạn)
+      await page.type('input[type="email"], input[placeholder*="email" i]', 'customersuport@gmail.com', { delay: 50 });
+
+      // Tìm và bấm nút "Tiếp tục"
+      await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const nextBtn = btns.find(b => b.innerText.toLowerCase().includes('tiếp tục'));
+        if (nextBtn) nextBtn.click();
+      });
+
+      // 4.2. Chờ chuyển cảnh và hiện ô gõ mật khẩu
+      await page.waitForSelector('input[type="password"]', { visible: true, timeout: 5000 });
+      
+      // 🔴 SỬA MẬT KHẨU Ở ĐÂY 🔴 (Thay Fpt@1234 thành mật khẩu của bạn)
+      await page.type('input[type="password"]', 'thads@2025', { delay: 50 });
+
+      // Tìm và bấm nút "Đăng nhập" (Hoặc "Tiếp tục" lần 2)
+      await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        const loginBtn = btns.find(b => b.innerText.toLowerCase().includes('tiếp tục') || b.innerText.toLowerCase().includes('đăng nhập'));
+        if (loginBtn) loginBtn.click();
+      });
+
+      // 4.3. Đợi trang chuyển hướng vào bên trong (Thành công mượn Session)
+      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
+
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Bơm Token của ${email} vào bộ nhớ...` });
+
+      // 5. PHÉP THUẬT: TRÁO ĐỔI TOKEN VÀO LOCAL STORAGE
       await page.evaluate((token) => {
-        // LƯU Ý: Nếu Tên key lưu trong F12 của web FPT không phải là 'access_token' (vd: 'jhi-authenticationToken', 'token'...), 
-        // bạn hãy đổi chữ 'access_token' dưới đây cho khớp nhé!
-        localStorage.setItem('access_token', token); 
+        // Lưu ý: Đa số web FPT yêu cầu token lưu dạng chuỗi JSON có ngoặc kép
+        localStorage.setItem('access_token', `"${token}"`); 
+        
+        // NẾU CHẠY MÀ BỊ VĂNG RA LOGIN THÌ XÓA DÒNG TRÊN VÀ MỞ DÒNG NÀY:
+        // localStorage.setItem('access_token', token);
       }, guestToken);
 
-      // 5. Load lại trang để web nhận Token vừa bơm và tự động nhảy vào giao diện bên trong
-      await page.reload({ waitUntil: 'networkidle2' });
+      // 6. RELOAD VÀ VÀO THẲNG TRANG PROFILE (Lúc này web đã tưởng bạn là email khách hàng)
+      await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'networkidle2' });
       
       if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Mở thành công tài khoản: ${email}` });
 
