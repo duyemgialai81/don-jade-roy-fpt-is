@@ -58,7 +58,7 @@ app.on('window-all-closed', () => {
 // CẤU HÌNH TÀI KHOẢN LẤY TOKEN (TÀI KHOẢN HIẾU)
 // ==========================================
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
-const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
+const TOKEN_PASS = 'gbgjyy'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở ĐÂY 🔴
 
 // ==========================================
 // HÀM LẤY TOKEN NGẦM TỪ TRANG ECONTRACT (1 BƯỚC)
@@ -66,13 +66,12 @@ const TOKEN_PASS = 'Lehieu1993'; // 🔴 SỬA MẬT KHẨU CỦA HIẾU Ở Đ�
 async function fetchMasterToken(executablePath) {
   const browser = await puppeteer.launch({
     executablePath: executablePath,
-    // BẬT LÊN FALSE TẠM THỜI ĐỂ DEBUG XEM NÓ BỊ KẸT Ở MÀN HÌNH NÀO
-    headless: false, 
+    headless: true, // Để True chạy ngầm cho êm
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox', 
       '--window-size=1280,800',
-      '--disable-blink-features=AutomationControlled' // Bypass hệ thống chống Bot cơ bản
+      '--disable-blink-features=AutomationControlled'
     ]
   });
 
@@ -86,14 +85,14 @@ async function fetchMasterToken(executablePath) {
     // Nới lỏng thời gian chờ mạng
     await page.goto('https://econtract.fpt.com/op/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // QUAN TRỌNG: Ép tool đợi hẳn 5 giây để chắc chắn giao diện Angular tải xong 100%
+    // Ép tool đợi hẳn 5 giây để chắc chắn giao diện Angular tải xong 100%
     await new Promise(r => setTimeout(r, 5000));
 
-    // Dùng cách bắt selector rộng nhất có thể: Tìm BẤT KỲ ô input nào có chứa chữ email hoặc type là text/email
+    // Nhập Email
     await page.waitForSelector('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', { visible: true, timeout: 15000 });
     await page.type('input[id="email"], input[formcontrolname="username"], input[type="email"], input[type="text"]', TOKEN_EMAIL, { delay: 100 });
 
-    // Tương tự với ô mật khẩu
+    // Nhập Mật khẩu
     await page.waitForSelector('input[id="pass"], input[formcontrolname="password"], input[type="password"]', { visible: true });
     await page.type('input[id="pass"], input[formcontrolname="password"], input[type="password"]', TOKEN_PASS, { delay: 100 });
 
@@ -104,18 +103,30 @@ async function fetchMasterToken(executablePath) {
       if (loginBtn) loginBtn.click();
     });
 
-    // Chờ load xong và moi Token
+    // Chờ load xong
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
     await new Promise(r => setTimeout(r, 3000));
 
+    // MOI TOKEN VÀ RỬA SẠCH DẤU NGOẶC KÉP
     let token = await page.evaluate(() => {
-      return localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || localStorage.getItem('token');
+      let raw = localStorage.getItem('access_token') || sessionStorage.getItem('access_token') || localStorage.getItem('token');
+      if (raw) {
+        try {
+          let parsed = JSON.parse(raw);
+          if (parsed && parsed.access_token) return parsed.access_token;
+        } catch(e) {}
+        // Chặn dấu ngoặc thừa
+        return raw.replace(/^"|"$/g, '');
+      }
+      return null;
     });
 
     if (!token) {
       const cookies = await page.cookies();
-      const tokenCookie = cookies.find(c => c.name === 'access_token' || c.name.includes('token'));
-      if (tokenCookie) token = tokenCookie.value;
+      const tokenCookie = cookies.find(c => c.name === 'access_token' || c.name.toLowerCase().includes('token'));
+      if (tokenCookie) {
+        token = tokenCookie.value.replace(/^"|"$/g, '').replace('Bearer ', '').trim();
+      }
     }
 
     await browser.close();
@@ -128,11 +139,11 @@ async function fetchMasterToken(executablePath) {
     throw new Error(`Lỗi đăng nhập tài khoản ${TOKEN_EMAIL}: ${error.message}`);
   }
 }
+
 // ==========================================
 // KÊNH GIAO TIẾP VỚI GIAO DIỆN REACT (IPC)
 // ==========================================
 
-// --- PHẦN 1: CẬP NHẬT PHẦN MỀM (AUTO-UPDATE) ---
 ipcMain.on('start-download', async () => {
   try {
     await autoUpdater.checkForUpdates();
@@ -158,8 +169,7 @@ autoUpdater.on('error', (error) => {
   if (win) win.webContents.send('update-error', error.message);
 });
 
-
-// --- PHẦN 2: TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC ---
+// --- TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC ---
 ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
   const emailsToProcess = emails.filter(e => e.trim() !== '').slice(0, 5);
   
@@ -184,7 +194,10 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
   try {
     if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang đăng nhập ngầm tài khoản ${TOKEN_EMAIL} để lấy Token...` });
     masterToken = await fetchMasterToken(executablePath);
-    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token thành công! Bắt đầu xử lý ${emailsToProcess.length} tài khoản khách...` });
+    
+    // In preview ra để xem Token sạch chưa
+    let previewToken = masterToken.substring(0, 20) + '...';
+    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token Hiếu thành công [${previewToken}]. Bắt đầu xử lý ${emailsToProcess.length} tài khoản khách...` });
   } catch (error) {
     if (win) win.webContents.send('auto-login-status', { type: 'error', msg: `Lấy Token tự động thất bại: ${error.message}` });
     return; // Ngừng chạy nếu không có token
@@ -196,9 +209,12 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
     try {
       if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang gọi API lấy token cho khách: ${email}...` });
 
-      // 1. Lấy Token của khách hàng từ API FPT bằng Token của Hiếu
+      // GỌI API BẰNG TOKEN CỦA HIẾU KÈM HEADER CHUẨN ĐỂ TRÁNH LỖI 401
       const response = await axios.get(`https://econtract.fpt.com/app/services/uaa/api/authentication/internal?login=${email}`, {
-        headers: { Authorization: `Bearer ${masterToken}` }
+        headers: { 
+          'Authorization': `Bearer ${masterToken}`,
+          'Accept': 'application/json, text/plain, */*'
+        }
       });
       const guestToken = response.data.access_token;
       if (!guestToken) throw new Error("Không lấy được access_token từ API");
