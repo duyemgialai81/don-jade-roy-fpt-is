@@ -19,7 +19,7 @@ export default function App() {
     'create': 'Quản lý Dashboard',
     'check': 'Kiểm tra trạng thái',
     'push': 'Đẩy dữ liệu hệ thống',
-    'autologin': 'Đăng nhập Cốc Cốc hàng loạt'
+    'autologin': 'Vô tài khoản khách'
   };
 
   return (

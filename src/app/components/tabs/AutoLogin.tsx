@@ -108,7 +108,7 @@ export const AutoLogin = () => {
       <div className="relative z-10">
         <h2 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent mb-6 flex items-center gap-2">
           <Terminal size={28} className="text-indigo-600" />
-          Auto Login Cốc Cốc (One-Click)
+            Nhập Danh Sách Email Khách Hàng
         </h2>
         
         <div className="space-y-6">

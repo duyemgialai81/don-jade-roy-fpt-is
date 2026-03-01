@@ -20,7 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, curren
     { id: 'create', label: 'Quản lý Dashboard', icon: LayoutDashboard },
     { id: 'check', label: 'Kiểm tra trạng thái', icon: Activity },
     { id: 'push', label: 'Đẩy dữ liệu', icon: Rocket },
-    { id: 'autologin', label: 'Đăng nhập Cốc Cốc', icon: Globe }, // <-- TAB MỚI NẰM Ở ĐÂY
+    { id: 'autologin', label: 'Vô tài khoản khách', icon: Globe }, // <-- TAB MỚI NẰM Ở ĐÂY
   ];
 
   const envOptions = [
