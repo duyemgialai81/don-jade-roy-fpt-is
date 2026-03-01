@@ -1,19 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, Info, X, Key, Mail, Terminal, Loader2, Rocket } from 'lucide-react';
+import { AlertCircle, Info, X, Mail, Terminal, Loader2, Rocket } from 'lucide-react';
 
-// Khai báo an toàn ipcRenderer
 const ipcRenderer = typeof window !== 'undefined' && window.require 
   ? window.require('electron').ipcRenderer 
   : null;
 
 // ==========================================
 // BỘ NHỚ TẠM (CACHE) 
-// Sống sót qua việc chuyển tab, chỉ reset khi Reload App
 // ==========================================
 let cachedData = {
   emails: '',
-  masterToken: '',
   statusLogs: [] as {type: string, msg: string}[]
 };
 
@@ -28,25 +25,19 @@ interface ModalState {
 
 export const AutoLogin = () => {
   const [emails, setEmails] = useState(cachedData.emails);
-  const [masterToken, setMasterToken] = useState(cachedData.masterToken);
   const [statusLogs, setStatusLogs] = useState<{type: string, msg: string}[]>(cachedData.statusLogs);
   const [isLoading, setIsLoading] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Tự động cuộn xuống cuối khi có log mới
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [statusLogs]);
 
   useEffect(() => { cachedData.emails = emails; }, [emails]);
-  useEffect(() => { cachedData.masterToken = masterToken; }, [masterToken]);
   useEffect(() => { cachedData.statusLogs = statusLogs; }, [statusLogs]);
 
   const [modal, setModal] = useState<ModalState>({
-    isOpen: false,
-    type: 'alert',
-    title: '',
-    message: ''
+    isOpen: false, type: 'alert', title: '', message: ''
   });
 
   const showAlert = (title: string, message: string) => {
@@ -57,9 +48,7 @@ export const AutoLogin = () => {
     setModal({ isOpen: true, type: 'confirm', title, message, onConfirm });
   };
 
-  const closeModal = () => {
-    setModal(prev => ({ ...prev, isOpen: false }));
-  };
+  const closeModal = () => setModal(prev => ({ ...prev, isOpen: false }));
 
   useEffect(() => {
     if (!ipcRenderer) return;
@@ -69,9 +58,7 @@ export const AutoLogin = () => {
       
       if (data.msg === 'Hoàn tất quá trình đăng nhập hàng loạt!' || data.msg === 'Hoàn tất quá trình đăng nhập!' || data.msg.includes('Không tìm thấy Cốc Cốc')) {
         setIsLoading(false);
-        setTimeout(() => {
-          showAlert("Thông báo hệ thống", data.msg);
-        }, 300);
+        setTimeout(() => showAlert("Thông báo hệ thống", data.msg), 300);
       }
     };
 
@@ -86,16 +73,12 @@ export const AutoLogin = () => {
     setIsLoading(true);
     setStatusLogs([]);
     cachedData.statusLogs = []; 
-    ipcRenderer.send('auto-login-coccoc', { emails: emailList, masterToken });
+    ipcRenderer.send('auto-login-coccoc', { emails: emailList });
   };
 
   const handleStartLogin = () => {
     if (!ipcRenderer) {
-      showAlert("Lỗi môi trường", "Tính năng Auto Login can thiệp sâu vào hệ thống, chỉ hoạt động trên Ứng dụng Desktop (Electron). Vui lòng không dùng trên trình duyệt web!");
-      return;
-    }
-    if (!masterToken) {
-      showAlert("Thiếu thông tin", "Vui lòng nhập Master Token (Token lấy từ Postman)!");
+      showAlert("Lỗi môi trường", "Tính năng Auto Login chỉ hoạt động trên Ứng dụng Desktop (Electron)!");
       return;
     }
     
@@ -112,48 +95,27 @@ export const AutoLogin = () => {
 
     showConfirm(
       "Xác nhận đăng nhập", 
-      `Hệ thống sẽ tự động mở ${emailList.length} tài khoản Cốc Cốc.\nBạn có chắc chắn muốn bắt đầu không?`,
+      `Hệ thống sẽ tự động chạy ngầm để lấy Token, sau đó mở ${emailList.length} tài khoản Cốc Cốc.\nBạn có chắc chắn muốn bắt đầu?`,
       () => executeLogin(emailList)
     );
   };
 
   return (
     <div className="max-w-2xl mx-auto p-8 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative overflow-hidden">
-      {/* Background Decor */}
       <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 bg-indigo-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-violet-50 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
 
       <div className="relative z-10">
         <h2 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent mb-6 flex items-center gap-2">
           <Terminal size={28} className="text-indigo-600" />
-          Auto Login Cốc Cốc
+          Auto Login Cốc Cốc (One-Click)
         </h2>
         
         <div className="space-y-6">
-          {/* Master Token Input */}
-          <div className="group">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">
-              Master Token <span className="text-slate-400 font-normal">(Bearer ...)</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Key size={18} className="text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-              </div>
-              <input 
-                type="text" 
-                value={masterToken}
-                onChange={(e) => setMasterToken(e.target.value)}
-                placeholder="eyJhbGciOiJIUzI1NiIs..."
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none font-mono text-sm text-slate-700 shadow-sm"
-              />
-            </div>
-          </div>
-
-          {/* Emails Input */}
           <div className="group">
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex justify-between items-end">
-              <span>Danh sách Email</span>
-              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-md">Tối đa 5 tài khoản</span>
+              <span>Danh sách Email khách hàng</span>
+              <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-md">Mỗi dòng 1 mail (Tối đa 5)</span>
             </label>
             <div className="relative">
               <div className="absolute top-3.5 left-0 pl-3.5 pointer-events-none">
@@ -162,14 +124,13 @@ export const AutoLogin = () => {
               <textarea 
                 value={emails}
                 onChange={(e) => setEmails(e.target.value)}
-                placeholder="nguyenvana@gmail.com&#10;tranvanb@yahoo.com"
+                placeholder="khachhang1@gmail.com&#10;khachhang2@yahoo.com"
                 rows={5}
                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none text-sm text-slate-700 shadow-sm resize-none leading-relaxed"
               />
             </div>
           </div>
 
-          {/* Action Button */}
           <button 
             onClick={handleStartLogin}
             disabled={isLoading}
@@ -182,17 +143,16 @@ export const AutoLogin = () => {
             {isLoading ? (
               <>
                 <Loader2 size={20} className="animate-spin" />
-                Đang thao tác ngầm, vui lòng đợi...
+                Hệ thống đang thao tác, vui lòng đợi...
               </>
             ) : (
               <>
                 <Rocket size={20} />
-                Bắt đầu đăng nhập hàng loạt
+                Bắt đầu Auto Login
               </>
             )}
           </button>
 
-          {/* Log Area */}
           <AnimatePresence>
             {statusLogs.length > 0 && (
               <motion.div 
@@ -229,7 +189,6 @@ export const AutoLogin = () => {
         </div>
       </div>
 
-      {/* Modal Overlay */}
       <AnimatePresence>
         {modal.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -272,10 +231,7 @@ export const AutoLogin = () => {
 
               <div className="p-5 bg-slate-50/80 border-t border-slate-100 flex justify-end gap-3">
                 {modal.type === 'confirm' && (
-                  <button 
-                    onClick={closeModal}
-                    className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors"
-                  >
+                  <button onClick={closeModal} className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 rounded-xl transition-colors">
                     Hủy bỏ
                   </button>
                 )}
