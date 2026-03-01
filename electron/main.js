@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
-// Thêm thư viện cập nhật ngầm
 import pkgUpdater from 'electron-updater';
 const { autoUpdater } = pkgUpdater;
 
@@ -21,8 +20,9 @@ const createWindow = () => {
     },
   });
   
-  // LỆNH NÀY GIÚP XÓA THANH MENU (File, Edit, View, Window, Help...)
+  // Ẩn thanh menu mặc định của Windows
   win.setMenu(null); 
+  // win.maximize();
 
   if (app.isPackaged) {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -30,7 +30,7 @@ const createWindow = () => {
     win.loadURL('http://localhost:5173');
   }
   
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = false; // Tắt tải tự động, chờ React gọi
   autoUpdater.autoInstallOnAppQuit = true;
 };
 
@@ -52,34 +52,32 @@ app.on('window-all-closed', () => {
 // KÊNH GIAO TIẾP VỚI GIAO DIỆN REACT (IPC)
 // ==========================================
 
-// 1. Nhận lệnh báo tải bản cập nhật từ React (ĐÃ SỬA LỖI "Check update first")
+// 1. Nhận lệnh tải cập nhật
 ipcMain.on('start-download', async () => {
   try {
-    // Bắt buộc phải kiểm tra ngầm trước khi tải
     await autoUpdater.checkForUpdates();
-    // Sau đó mới tiến hành tải xuống
     autoUpdater.downloadUpdate();
   } catch (error) {
     if (win) win.webContents.send('update-error', 'Lỗi hệ thống: ' + error.message);
   }
 });
 
-// 2. Nhận lệnh báo Cài đặt và Khởi động lại từ React
+// 2. Nhận lệnh cài đặt (isSilent = true để cài ngầm mượt mà)
 ipcMain.on('quit-and-install', () => {
-  autoUpdater.quitAndInstall(false, true); 
+  autoUpdater.quitAndInstall(true, true); 
 });
 
-// 3. Gửi phần trăm tải về cho React để làm thanh tiến trình
+// 3. Gửi phần trăm tải xuống
 autoUpdater.on('download-progress', (progressObj) => {
   if (win) win.webContents.send('download-progress', progressObj.percent);
 });
 
-// 4. Báo cho React biết đã tải xong file .exe vào bộ nhớ tạm
+// 4. Báo hiệu tải hoàn tất
 autoUpdater.on('update-downloaded', () => {
   if (win) win.webContents.send('update-downloaded');
 });
 
-// 5. Báo lỗi nếu có
+// 5. Bắt lỗi
 autoUpdater.on('error', (error) => {
   if (win) win.webContents.send('update-error', error.message);
 });

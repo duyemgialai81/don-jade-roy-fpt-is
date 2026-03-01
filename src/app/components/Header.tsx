@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Settings, Clock, CloudSun } from 'lucide-react';
+
+// LƯU Ý 1: Nếu Header.tsx và HeaderDropdowns.tsx nằm CÙNG 1 thư mục thì dùng './HeaderDropdowns'
 import { HeaderDropdown, NotificationsList, SettingsList, UpdateInfo } from '../components/ui/HeaderDropdowns';
 
-// Import trực tiếp version từ package.json
-// LƯU Ý: Chỉnh lại số lượng ../ sao cho trỏ đúng ra file package.json gốc
+// LƯU Ý 2: Chỉnh lại số lượng ../ sao cho trỏ đúng ra file package.json gốc
 import pkg from '../../../package.json'; 
 
 interface HeaderProps {
@@ -26,21 +27,24 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [temperature, setTemperature] = useState<number | null>(null);
 
-    // Đồng hồ thời gian thực
+    // 1. Logic: Đồng hồ thời gian thực (Cập nhật mỗi giây)
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    // Lấy nhiệt độ thực tế (Sử dụng Open-Meteo API miễn phí, tọa độ Hà Nội)
+    // 2. Logic: Lấy nhiệt độ thực tế tại Hà Nội (API Open-Meteo miễn phí)
     useEffect(() => {
+        let isMounted = true; // Biến cờ để tránh lỗi update state khi component đã unmount
+
         const fetchWeather = async () => {
             try {
                 // Tọa độ Hà Nội: lat 21.0285, long 105.8542
                 const response = await fetch('https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current_weather=true');
                 if (!response.ok) return;
+                
                 const data = await response.json();
-                if (data.current_weather) {
+                if (data.current_weather && isMounted) {
                     setTemperature(data.current_weather.temperature);
                 }
             } catch (error) {
@@ -49,12 +53,16 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
         };
 
         fetchWeather();
-        // Cập nhật thời tiết mỗi 30 phút
+        
+        // Cập nhật thời tiết mỗi 30 phút (Tránh bị API chặn vì gọi quá nhiều)
         const weatherTimer = setInterval(fetchWeather, 30 * 60 * 1000);
-        return () => clearInterval(weatherTimer);
+        return () => {
+            isMounted = false;
+            clearInterval(weatherTimer);
+        };
     }, []);
 
-    // Kiểm tra cập nhật hệ thống
+    // 3. Logic: Kiểm tra cập nhật hệ thống từ GitHub
     useEffect(() => {
         const isElectron = navigator.userAgent.toLowerCase().includes('electron');
         if (!isElectron) return; 
@@ -107,8 +115,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
             </div>
             
             <div className="flex items-center gap-4">
-                {/* HIỂN THỊ THỜI GIAN & NHIỆT ĐỘ */}
-                <div className="hidden md:flex items-center gap-4 bg-slate-50 border border-slate-200/80 rounded-full px-4 py-2 shadow-sm transition-all hover:bg-white hover:shadow-md">
+                {/* WIDGET HIỂN THỊ THỜI GIAN & NHIỆT ĐỘ */}
+                <div className="hidden md:flex items-center gap-4 bg-slate-50 border border-slate-200/80 rounded-full px-4 py-2 shadow-sm transition-all hover:bg-white hover:shadow-md cursor-default">
                     <div className="flex items-center gap-2 text-slate-600">
                         <Clock size={16} className="text-indigo-500" />
                         <span className="text-sm font-semibold tracking-wide">
@@ -116,10 +124,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                         </span>
                     </div>
                     <div className="w-[1px] h-4 bg-slate-200" />
-                    <div className="flex items-center gap-2 text-slate-600">
+                    <div className="flex items-center gap-2 text-slate-600" title="Nhiệt độ tại Hà Nội">
                         <CloudSun size={16} className="text-orange-500" />
                         <span className="text-sm font-semibold">
-                            {temperature !== null ? `${temperature}°C` : '--°C'}
+                            {temperature !== null ? `${Math.round(temperature)}°C` : '--°C'}
                         </span>
                     </div>
                 </div>
@@ -141,7 +149,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, titles }) => {
                     )}
                   </button>
 
-                  {/* Truyền updateAvailable vào NotificationsList */}
                   <HeaderDropdown isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} title="Thông báo">
                       <NotificationsList updateAvailable={updateAvailable} />
                   </HeaderDropdown>

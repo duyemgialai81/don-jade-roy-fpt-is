@@ -61,7 +61,6 @@ interface NotificationsListProps {
   updateAvailable?: UpdateInfo | null;
 }
 
-// Khai báo an toàn ipcRenderer để React gọi được lệnh của Electron
 const ipcRenderer = typeof window !== 'undefined' && window.require 
   ? window.require('electron').ipcRenderer 
   : null;
@@ -72,7 +71,6 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
   const [isReadyToInstall, setIsReadyToInstall] = useState(false);
   const [updateError, setUpdateError] = useState('');
 
-  // Lắng nghe tín hiệu từ Backend Electron gửi lên
   useEffect(() => {
     if (!ipcRenderer) return;
 
@@ -81,8 +79,9 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
     };
 
     const handleDownloaded = () => {
+      setDownloadProgress(100); 
       setIsDownloading(false);
-      setIsReadyToInstall(true);
+      setIsReadyToInstall(true); 
     };
 
     const handleError = (_event: any, message: string) => {
@@ -103,7 +102,6 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
 
   const handleUpdateAction = () => {
     if (!ipcRenderer) {
-        // Nếu chạy trên Web (Không phải Electron) thì mở link tải tay
         if (updateAvailable) window.open(updateAvailable.downloadUrl, '_blank');
         return;
     }
@@ -140,26 +138,24 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
               <p className="text-xs text-red-500 font-medium mb-2">{updateError}</p>
             )}
 
-            {/* Thanh tiến trình */}
-            {isDownloading && (
+            {(isDownloading || isReadyToInstall) && (
               <div className="mb-3 mt-2">
                 <div className="flex justify-between text-xs text-indigo-600 font-medium mb-1">
-                  <span>Đang tải xuống...</span>
+                  <span>{isReadyToInstall ? 'Đã tải xong 100%' : 'Đang tải xuống...'}</span>
                   <span>{downloadProgress}%</span>
                 </div>
-                <div className="w-full bg-indigo-100 rounded-full h-1.5">
+                <div className="w-full bg-indigo-100 rounded-full h-1.5 overflow-hidden">
                   <div 
-                    className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300" 
+                    className={`h-1.5 rounded-full transition-all duration-300 ${isReadyToInstall ? 'bg-emerald-500' : 'bg-indigo-600'}`} 
                     style={{ width: `${downloadProgress}%` }}
                   ></div>
                 </div>
               </div>
             )}
 
-            {/* Nút hành động */}
             <button 
                onClick={handleUpdateAction}
-               disabled={isDownloading}
+               disabled={isDownloading && !isReadyToInstall}
                className={`mt-2 block w-full py-2 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm ${
                  isReadyToInstall 
                    ? 'bg-emerald-500 hover:bg-emerald-600 animate-pulse' 
@@ -168,7 +164,11 @@ export const NotificationsList: React.FC<NotificationsListProps> = ({ updateAvai
                      : 'bg-indigo-600 hover:bg-indigo-700' 
                }`}
             >
-              {isReadyToInstall ? 'Khởi động lại & Cài đặt ngay' : isDownloading ? 'Đang xử lý...' : 'Tải & Cập nhật ngay'}
+              {isReadyToInstall 
+                ? 'Khởi động lại & Cài đặt ngay' 
+                : isDownloading 
+                  ? 'Đang tải xuống...' 
+                  : 'Tải & Cập nhật ngay'}
             </button>
           </div>
         </div>
