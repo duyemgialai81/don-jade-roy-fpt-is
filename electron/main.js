@@ -9,6 +9,8 @@ import axios from 'axios';
 import puppeteer from 'puppeteer-core';
 import fs from 'fs';
 import os from 'os';
+// THÊM THƯ VIỆN NÀY ĐỂ CHẠY LỆNH REGISTRY WINDOWS
+import { execSync } from 'child_process'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,10 +54,10 @@ app.on('window-all-closed', () => {
 });
 
 // ==========================================
-// CẤU HÌNH TÀI KHOẢN LẤY TOKEN (TÀI KHOẢN HIẾU)
+// CẤU HÌNH TÀI KHOẢN MASTER (ĐỂ LẤY TOKEN GỐC)
 // ==========================================
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
-const TOKEN_PASS = 'Lehieu1993'; 
+const TOKEN_PASS = 'dsdsd'; 
 
 // ==========================================
 // BỘ NHỚ TẠM (CACHE) CHO MASTER TOKEN - LƯU 5 PHÚT
@@ -88,7 +90,7 @@ async function fetchMasterToken(executablePath) {
     await new Promise(r => setTimeout(r, 3000)); 
 
     await page.waitForSelector('#email', { visible: true, timeout: 15000 });
-    await page.type('#email', TOKEN_EMAIL, { delay: 10 }); // Gõ nhanh hơn vì đang chạy ngầm
+    await page.type('#email', TOKEN_EMAIL, { delay: 10 }); 
 
     await page.waitForSelector('#pass', { visible: true });
     await page.type('#pass', TOKEN_PASS, { delay: 10 });
@@ -114,7 +116,7 @@ async function fetchMasterToken(executablePath) {
     return tokenCookie.value;
   } catch (error) {
     if (browser) await browser.close();
-    throw new Error(`Lỗi đăng nhập: ${error.message}`);
+    throw new Error(`Lỗi đăng nhập lấy token: ${error.message}`);
   }
 }
 
@@ -122,6 +124,7 @@ async function fetchMasterToken(executablePath) {
 // KÊNH GIAO TIẾP VỚI GIAO DIỆN REACT (IPC)
 // ==========================================
 
+// --- AUTO UPDATE ---
 ipcMain.on('start-download', async () => {
   try {
     await autoUpdater.checkForUpdates();
@@ -136,34 +139,104 @@ autoUpdater.on('download-progress', (progressObj) => win && win.webContents.send
 autoUpdater.on('update-downloaded', () => win && win.webContents.send('update-downloaded'));
 autoUpdater.on('error', (error) => win && win.webContents.send('update-error', error.message));
 
+
 // --- TỰ ĐỘNG ĐĂNG NHẬP CỐC CỐC ---
-ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
+// Thay đổi tên IPC cho chuẩn với Frontend
+ipcMain.on('auto-login-browser', async (event, { emails, browserType }) => {
   const emailsToProcess = emails.filter(e => e.trim() !== '').slice(0, 5);
   if (emailsToProcess.length === 0) return;
 
+  // ==========================================================
+  // THUẬT TOÁN TÌM KIẾM TRÌNH DUYỆT ĐỘNG (CHROME, EDGE, CỐC CỐC)
+  // ==========================================================
+  let executablePath = null;
   const username = os.userInfo().username;
-  const cocCocPaths = [
-    `C:\\Users\\${username}\\AppData\\Local\\CocCoc\\Browser\\Application\\browser.exe`,
-    `C:\\Program Files\\CocCoc\\Browser\\Application\\browser.exe`,
-    `C:\\Program Files (x86)\\CocCoc\\Browser\\Application\\browser.exe`
-  ];
-  const executablePath = cocCocPaths.find(fs.existsSync);
+  let defaultPaths = [];
+  let regQueries = [];
+  let browserName = "Trình duyệt";
 
+  if (browserType === 'chrome') {
+    browserName = "Google Chrome";
+    defaultPaths = [
+      `C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe`,
+      `C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe`,
+      `C:\\Users\\${username}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`
+    ];
+    regQueries = [
+      'reg query "HKEY_CURRENT_USER\\SOFTWARE\\Clients\\StartMenuInternet\\Google Chrome\\shell\\open\\command" /ve',
+      'reg query "HKEY_LOCAL_MACHINE\\SOFTWARE\\Clients\\StartMenuInternet\\Google Chrome\\shell\\open\\command" /ve'
+    ];
+  } else if (browserType === 'edge') {
+    browserName = "Microsoft Edge";
+    defaultPaths = [
+      `C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe`,
+      `C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe`
+    ];
+    regQueries = [
+      'reg query "HKEY_CURRENT_USER\\SOFTWARE\\Clients\\StartMenuInternet\\Microsoft Edge\\shell\\open\\command" /ve',
+      'reg query "HKEY_LOCAL_MACHINE\\SOFTWARE\\Clients\\StartMenuInternet\\Microsoft Edge\\shell\\open\\command" /ve'
+    ];
+  } else {
+    browserName = "Cốc Cốc";
+    defaultPaths = [
+      `C:\\Users\\${username}\\AppData\\Local\\CocCoc\\Browser\\Application\\browser.exe`,
+      `C:\\Program Files\\CocCoc\\Browser\\Application\\browser.exe`,
+      `C:\\Program Files (x86)\\CocCoc\\Browser\\Application\\browser.exe`,
+      `D:\\Program Files\\CocCoc\\Browser\\Application\\browser.exe`
+    ];
+    regQueries = [
+      'reg query "HKEY_CURRENT_USER\\SOFTWARE\\Clients\\StartMenuInternet\\CocCoc\\shell\\open\\command" /ve',
+      'reg query "HKEY_LOCAL_MACHINE\\SOFTWARE\\Clients\\StartMenuInternet\\CocCoc\\shell\\open\\command" /ve'
+    ];
+  }
+
+  // 1. Check nhanh đường dẫn mặc định
+  for (const p of defaultPaths) {
+    if (fs.existsSync(p)) {
+      executablePath = p;
+      break;
+    }
+  }
+
+  // 2. Truy lùng bằng Registry nếu không thấy
   if (!executablePath) {
-    if (win) win.webContents.send('auto-login-status', { type: 'error', msg: 'Không tìm thấy Cốc Cốc trên máy tính!' });
+    if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang tìm vị trí cài đặt ${browserName}...` });
+    for (const query of regQueries) {
+      try {
+        const stdout = execSync(query, { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
+        const lines = stdout.split('\n');
+        for (let line of lines) {
+          if (line.includes('REG_SZ')) {
+            let p = line.split('REG_SZ')[1].trim();
+            if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
+            if (fs.existsSync(p)) {
+              executablePath = p;
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+      if (executablePath) break;
+    }
+  }
+
+  // 3. Chốt kết quả
+  if (!executablePath) {
+    if (win) win.webContents.send('auto-login-status', { type: 'error', msg: `Máy tính này chưa cài đặt ${browserName}!` });
     return;
   }
+  // ==========================================================
   
-  // BƯỚC 1: KIỂM TRA CACHE HOẶC LẤY TOKEN MỚI CỦA HIẾU
+  // BƯỚC 1: KIỂM TRA CACHE HOẶC LẤY TOKEN MỚI CỦA MASTER
   const now = Date.now();
   if (globalMasterToken && (now - lastTokenTime < TOKEN_LIFESPAN_MS)) {
-    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Sử dụng lại Token cũ (còn hạn trong 5 phút). Bắt đầu xử lý khách...` });
+    if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Sử dụng lại Token cũ. Bắt đầu xử lý khách...` });
   } else {
     try {
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Token hết hạn/Chưa có. Đang lấy Token ngầm mới...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `Đang lấy Token Master ngầm mới...` });
       globalMasterToken = await fetchMasterToken(executablePath);
-      lastTokenTime = Date.now(); // Cập nhật lại thời gian
-      if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token thành công! Cập nhật cache 5 phút.` });
+      lastTokenTime = Date.now(); 
+      if (win) win.webContents.send('auto-login-status', { type: 'success', msg: `Lấy Token thành công! Đã lưu vào bộ nhớ tạm.` });
     } catch (error) {
       if (win) win.webContents.send('auto-login-status', { type: 'error', msg: `Lấy Token thất bại: ${error.message}` });
       return; 
@@ -185,9 +258,8 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
       const guestToken = response.data.access_token;
       if (!guestToken) throw new Error("Không lấy được access_token từ API");
 
-      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `[${email}] Đang thiết lập phiên đăng nhập ngầm...` });
+      if (win) win.webContents.send('auto-login-status', { type: 'info', msg: `[${email}] Đang thiết lập phiên đăng nhập ngầm trên ${browserName}...` });
 
-      // GIẤU CỬA SỔ LÓT ĐƯỜNG: Đẩy tọa độ ra ngoài màn hình (-10000, -10000)
       const browser = await puppeteer.launch({
         executablePath: executablePath,
         headless: false, 
@@ -201,7 +273,6 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
       const pages = await browser.pages();
       const page = pages[0];
 
-      // Thao tác gõ phím này diễn ra ở cửa sổ ngoài màn hình, bạn sẽ không thấy
       await page.goto('https://eaccount.kyta.fpt.com/login', { waitUntil: 'networkidle2' });
       await page.waitForSelector('input[type="email"], input[placeholder*="email" i]', { visible: true });
       await page.type('input[type="email"], input[placeholder*="email" i]', 'customersuport@gmail.com', { delay: 10 });
@@ -221,7 +292,6 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
 
       await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
 
-      // TIÊM TOKEN VÀ VÀO TRANG PROFILE
       await page.setCookie(
         { name: 'access_token', value: guestToken, domain: '.fpt.com', path: '/', secure: true, httpOnly: true },
         { name: 'access_token', value: guestToken, domain: 'eaccount.kyta.fpt.com', path: '/', secure: true, httpOnly: true }
@@ -230,7 +300,6 @@ ipcMain.on('auto-login-coccoc', async (event, { emails }) => {
       
       await page.goto('https://eaccount.kyta.fpt.com/account-profile', { waitUntil: 'networkidle2' });
       
-      // GỌI CỬA SỔ VỀ LẠI MÀN HÌNH CHÍNH VÀ PHÓNG TO LÊN
       try {
         const session = await page.target().createCDPSession();
         const { windowId } = await session.send('Browser.getWindowForTarget');

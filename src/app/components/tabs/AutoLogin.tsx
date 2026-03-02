@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, Info, X, Mail, Terminal, Loader2, Rocket } from 'lucide-react';
+import { AlertCircle, Info, X, Mail, Terminal, Loader2, Rocket, Globe, Chrome, Compass } from 'lucide-react';
 
 const ipcRenderer = typeof window !== 'undefined' && window.require 
   ? window.require('electron').ipcRenderer 
@@ -11,6 +11,7 @@ const ipcRenderer = typeof window !== 'undefined' && window.require
 // ==========================================
 let cachedData = {
   emails: '',
+  browserType: 'coccoc', // Mặc định là Cốc Cốc
   statusLogs: [] as {type: string, msg: string}[]
 };
 
@@ -25,6 +26,7 @@ interface ModalState {
 
 export const AutoLogin = () => {
   const [emails, setEmails] = useState(cachedData.emails);
+  const [browserType, setBrowserType] = useState(cachedData.browserType);
   const [statusLogs, setStatusLogs] = useState<{type: string, msg: string}[]>(cachedData.statusLogs);
   const [isLoading, setIsLoading] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -34,6 +36,7 @@ export const AutoLogin = () => {
   }, [statusLogs]);
 
   useEffect(() => { cachedData.emails = emails; }, [emails]);
+  useEffect(() => { cachedData.browserType = browserType; }, [browserType]);
   useEffect(() => { cachedData.statusLogs = statusLogs; }, [statusLogs]);
 
   const [modal, setModal] = useState<ModalState>({
@@ -56,7 +59,7 @@ export const AutoLogin = () => {
     const handleStatus = (_event: any, data: {type: string, msg: string}) => {
       setStatusLogs(prev => [...prev, data]);
       
-      if (data.msg === 'Hoàn tất quá trình đăng nhập hàng loạt!' || data.msg === 'Hoàn tất quá trình đăng nhập!' || data.msg.includes('Không tìm thấy Cốc Cốc')) {
+      if (data.msg === 'Hoàn tất quá trình đăng nhập hàng loạt!' || data.msg === 'Hoàn tất quá trình đăng nhập!' || data.msg.includes('Không tìm thấy')) {
         setIsLoading(false);
         setTimeout(() => showAlert("Thông báo hệ thống", data.msg), 300);
       }
@@ -73,7 +76,8 @@ export const AutoLogin = () => {
     setIsLoading(true);
     setStatusLogs([]);
     cachedData.statusLogs = []; 
-    ipcRenderer.send('auto-login-coccoc', { emails: emailList });
+    // Gửi kèm loại trình duyệt xuống Backend
+    ipcRenderer.send('auto-login-browser', { emails: emailList, browserType });
   };
 
   const handleStartLogin = () => {
@@ -93,12 +97,20 @@ export const AutoLogin = () => {
       return;
     }
 
+    const browserName = browserType === 'chrome' ? 'Google Chrome' : browserType === 'edge' ? 'Microsoft Edge' : 'Cốc Cốc';
+
     showConfirm(
       "Xác nhận đăng nhập", 
-      `Hệ thống sẽ tự động chạy ngầm để lấy Token, sau đó mở ${emailList.length} tài khoản Cốc Cốc.\nBạn có chắc chắn muốn bắt đầu?`,
+      `Hệ thống sẽ tự động chạy ngầm để lấy Token, sau đó mở ${emailList.length} tài khoản trên trình duyệt ${browserName}.\nBạn có chắc chắn muốn bắt đầu?`,
       () => executeLogin(emailList)
     );
   };
+
+  const browsers = [
+    { id: 'coccoc', name: 'Cốc Cốc', icon: Globe, color: 'text-green-600', bg: 'bg-green-50', activeBorder: 'border-green-500', activeRing: 'ring-green-100' },
+    { id: 'chrome', name: 'Chrome', icon: Chrome, color: 'text-blue-600', bg: 'bg-blue-50', activeBorder: 'border-blue-500', activeRing: 'ring-blue-100' },
+    { id: 'edge', name: 'Edge', icon: Compass, color: 'text-cyan-600', bg: 'bg-cyan-50', activeBorder: 'border-cyan-500', activeRing: 'ring-cyan-100' }
+  ];
 
   return (
     <div className="max-w-2xl mx-auto p-8 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative overflow-hidden">
@@ -112,9 +124,34 @@ export const AutoLogin = () => {
         </h2>
         
         <div className="space-y-6">
+          
+          {/* 1. CHỌN TRÌNH DUYỆT */}
+          <div className="group">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">1. Chọn trình duyệt khởi chạy</label>
+            <div className="grid grid-cols-3 gap-3">
+              {browsers.map((b) => {
+                const Icon = b.icon;
+                const isActive = browserType === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setBrowserType(b.id)}
+                    className={`flex items-center justify-center gap-2 py-3 px-2 rounded-xl border-2 transition-all duration-200 outline-none ${
+                      isActive ? `${b.activeBorder} ${b.bg} ring-4 ${b.activeRing}` : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon size={18} className={isActive ? b.color : 'text-slate-400'} />
+                    <span className={`text-sm font-bold ${isActive ? 'text-slate-800' : 'text-slate-500'}`}>{b.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 2. NHẬP EMAIL */}
           <div className="group">
             <label className="block text-sm font-semibold text-slate-700 mb-2 flex justify-between items-end">
-              <span>Danh sách Email khách hàng</span>
+              <span>2. Danh sách Email khách hàng</span>
               <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-1 rounded-md">Mỗi dòng 1 mail (Tối đa 5)</span>
             </label>
             <div className="relative">
