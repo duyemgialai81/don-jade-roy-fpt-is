@@ -57,7 +57,7 @@ app.on('window-all-closed', () => {
 // CẤU HÌNH TÀI KHOẢN MASTER (ĐỂ LẤY TOKEN GỐC)
 // ==========================================
 const TOKEN_EMAIL = 'hieult35@fpt.com.vn'; 
-const TOKEN_PASS = 'dsdsd'; 
+const TOKEN_PASS = 'Lehieu1993'; 
 
 // ==========================================
 // BỘ NHỚ TẠM (CACHE) CHO MASTER TOKEN - LƯU 5 PHÚT
